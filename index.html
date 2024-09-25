@@ -5,50 +5,111 @@
     <title>Recherche de Taxe d'Aménagement</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f2f2f2;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f4f8;
             margin: 0;
             padding: 0;
         }
         .container {
-            width: 50%;
+            width: 90%;
+            max-width: 600px;
             margin: 5% auto;
             background-color: #fff;
             padding: 2em;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
         }
         h1 {
             text-align: center;
             color: #333;
+            margin-bottom: 1em;
         }
         form {
+            display: flex;
+            justify-content: center;
             margin-bottom: 2em;
         }
         input[type="text"] {
-            width: 80%;
-            padding: 0.5em;
+            width: 70%;
+            padding: 0.8em;
             margin-right: 1em;
             font-size: 1em;
+            border: 1px solid #ccc;
+            border-radius: 25px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input[type="text"]:focus {
+            border-color: #007BFF;
         }
         input[type="submit"] {
-            padding: 0.5em 1em;
+            padding: 0.8em 1.5em;
             font-size: 1em;
             cursor: pointer;
+            background-color: #007BFF;
+            color: #fff;
+            border: none;
+            border-radius: 25px;
+            transition: background-color 0.3s;
+        }
+        input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        .selection {
+            margin-top: 2em;
+            text-align: center;
+        }
+        .selection label {
+            margin-right: 1em;
+            font-weight: bold;
+        }
+        select {
+            padding: 0.5em;
+            font-size: 1em;
+            border-radius: 25px;
+            border: 1px solid #ccc;
+            outline: none;
+            margin-right: 1em;
+            transition: border-color 0.3s;
+        }
+        select:focus {
+            border-color: #007BFF;
+        }
+        #getResult {
+            margin-top: 1em;
+            padding: 0.8em 1.5em;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #28a745;
+            color: #fff;
+            border: none;
+            border-radius: 25px;
+            transition: background-color 0.3s;
+        }
+        #getResult:hover {
+            background-color: #218838;
         }
         .results {
             margin-top: 2em;
         }
         .result-item {
-            background-color: #e9e9e9;
+            background-color: #e9ecef;
             padding: 1em;
             margin-bottom: 1em;
-            border-radius: 5px;
+            border-radius: 8px;
         }
         .result-item h2 {
             margin: 0 0 0.5em 0;
+            color: #343a40;
         }
         .result-item p {
             margin: 0.2em 0;
+            color: #495057;
+        }
+        .no-results {
+            text-align: center;
+            color: #dc3545;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -56,52 +117,215 @@
     <div class="container">
         <h1>Recherche de Taxe d'Aménagement</h1>
         <form id="searchForm">
-            <input type="text" id="cityInput" placeholder="Entrez le nom de la ville" required>
+            <input type="text" id="cityInput" placeholder="Entrez le nom de la commune" required>
             <input type="submit" value="Rechercher">
         </form>
+        <div class="selection" id="selection" style="display: none;">
+            <label for="sectionSelect" id="sectionLabel">Section :</label>
+            <select id="sectionSelect"></select>
+            <label for="parcelleSelect" id="parcelleLabel">Parcelle :</label>
+            <select id="parcelleSelect"></select>
+            <button id="getResult" style="display: none;">Obtenir les détails</button>
+        </div>
         <div class="results" id="results"></div>
     </div>
 
     <script>
+        let dataRecords = [];
+        let sections = [];
+        let parcelsBySection = {};
+
         document.getElementById('searchForm').addEventListener('submit', function(e){
             e.preventDefault();
             const city = document.getElementById('cityInput').value.trim().toUpperCase();
 
-            fetch(`https://data.economie.gouv.fr/api/records/1.0/search/?dataset=taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-a-partir-de-0&q=${city}&rows=20`)
+            fetch(`https://data.economie.gouv.fr/api/records/1.0/search/?dataset=taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-a-partir-de-0&rows=1000&q=${city}`)
             .then(response => response.json())
             .then(data => {
-                const resultsDiv = document.getElementById('results');
-                resultsDiv.innerHTML = ''; // Clear previous results
+                const records = data.records;
+                dataRecords = records.filter(record => record.fields.libelle_commune && record.fields.libelle_commune.toUpperCase() === city);
 
-                if (data.records.length > 0) {
-                    data.records.forEach(record => {
-                        const fields = record.fields;
-                        if (fields.libelle_commune && fields.libelle_commune.toUpperCase() === city) {
-                            const resultItem = document.createElement('div');
-                            resultItem.className = 'result-item';
-
-                            resultItem.innerHTML = `
-                                <h2>${fields.libelle_commune}</h2>
-                                <p><strong>Taux :</strong> ${fields.taux}%</p>
-                                <p><strong>Date d'effet :</strong> ${fields.date_effet}</p>
-                            `;
-
-                            resultsDiv.appendChild(resultItem);
-                        }
-                    });
-
-                    if (resultsDiv.innerHTML === '') {
-                        resultsDiv.innerHTML = '<p>Aucun résultat trouvé pour cette ville.</p>';
-                    }
+                if (dataRecords.length > 0) {
+                    prepareData(dataRecords);
+                    populateSectionDropdown();
                 } else {
-                    resultsDiv.innerHTML = '<p>Aucun résultat trouvé pour cette ville.</p>';
+                    document.getElementById('results').innerHTML = '<p class="no-results">Aucun résultat trouvé pour cette commune.</p>';
                 }
             })
             .catch(error => {
                 console.error('Erreur:', error);
-                document.getElementById('results').innerHTML = '<p>Une erreur est survenue lors de la recherche.</p>';
+                document.getElementById('results').innerHTML = '<p class="no-results">Une erreur est survenue lors de la recherche.</p>';
             });
         });
+
+        function prepareData(records) {
+            sections = [...new Set(records.map(record => record.fields.section || 'null'))];
+
+            // Trier les sections pour mettre 'null' en premier
+            sections.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
+
+            parcelsBySection = {};
+            sections.forEach(section => {
+                const parcels = [...new Set(records
+                    .filter(record => (record.fields.section || 'null') === section)
+                    .map(record => record.fields.parcelle || 'null'))];
+
+                // Trier les parcelles pour mettre 'null' en premier
+                parcels.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
+
+                parcelsBySection[section] = parcels;
+            });
+        }
+
+        function populateSectionDropdown() {
+            const sectionSelect = document.getElementById('sectionSelect');
+            const parcelleSelect = document.getElementById('parcelleSelect');
+            const selectionDiv = document.getElementById('selection');
+            const sectionLabel = document.getElementById('sectionLabel');
+            const parcelleLabel = document.getElementById('parcelleLabel');
+            const getResultButton = document.getElementById('getResult');
+
+            // Réinitialiser les sélections précédentes
+            sectionSelect.innerHTML = '';
+            parcelleSelect.innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+
+            if (sections.length === 1) {
+                // S'il n'y a qu'une seule section, ne pas afficher le menu de sélection
+                sectionLabel.style.display = 'none';
+                sectionSelect.style.display = 'none';
+
+                const singleSection = sections[0];
+                populateParcelleDropdown(singleSection);
+            } else {
+                // Afficher le menu de sélection des sections
+                sectionLabel.style.display = 'inline';
+                sectionSelect.style.display = 'inline';
+
+                // Ajouter les options au menu déroulant des sections
+                sections.forEach(section => {
+                    const option = document.createElement('option');
+                    option.value = section;
+                    option.textContent = section;
+                    sectionSelect.appendChild(option);
+                });
+
+                // Ajouter un écouteur d'événement pour mettre à jour les parcelles en fonction de la section sélectionnée
+                sectionSelect.addEventListener('change', function() {
+                    const selectedSection = sectionSelect.value;
+                    if (selectedSection) {
+                        populateParcelleDropdown(selectedSection);
+                    } else {
+                        parcelleSelect.innerHTML = '';
+                        parcelleSelect.style.display = 'none';
+                        parcelleLabel.style.display = 'none';
+                        getResultButton.style.display = 'none';
+                    }
+                });
+            }
+
+            selectionDiv.style.display = 'block';
+
+            // Masquer le bouton si aucun choix n'est nécessaire
+            if (sections.length === 1 && parcelsBySection[sections[0]].length === 1) {
+                getResultButton.style.display = 'none';
+            } else {
+                getResultButton.style.display = 'inline-block';
+            }
+        }
+
+        function populateParcelleDropdown(section) {
+            const parcelleSelect = document.getElementById('parcelleSelect');
+            const parcelleLabel = document.getElementById('parcelleLabel');
+            const getResultButton = document.getElementById('getResult');
+
+            const parcelles = parcelsBySection[section];
+
+            parcelleSelect.innerHTML = '';
+            parcelleSelect.style.display = 'inline-block';
+            parcelleLabel.style.display = 'inline';
+
+            if (parcelles.length === 1) {
+                // S'il n'y a qu'une seule parcelle, ne pas afficher le menu de sélection
+                parcelleSelect.style.display = 'none';
+                parcelleLabel.style.display = 'none';
+
+                // Afficher directement les résultats
+                displayResults(section, parcelles[0]);
+            } else {
+                // Ajouter les options au menu déroulant des parcelles
+                parcelles.forEach(parcelle => {
+                    const option = document.createElement('option');
+                    option.value = parcelle;
+                    option.textContent = parcelle;
+                    parcelleSelect.appendChild(option);
+                });
+
+                // Afficher le bouton si des choix sont à faire
+                getResultButton.style.display = 'inline-block';
+            }
+
+            // Masquer le bouton si aucun choix n'est nécessaire
+            if (sections.length === 1 && parcelles.length === 1) {
+                getResultButton.style.display = 'none';
+            }
+        }
+
+        document.getElementById('getResult').addEventListener('click', function(){
+            const sectionSelect = document.getElementById('sectionSelect');
+            const parcelleSelect = document.getElementById('parcelleSelect');
+
+            const selectedSection = sectionSelect.value || (sections.length === 1 ? sections[0] : null);
+            const selectedParcelle = parcelleSelect.value || (parcelsBySection[selectedSection].length === 1 ? parcelsBySection[selectedSection][0] : null);
+
+            if (selectedSection && selectedParcelle) {
+                displayResults(selectedSection, selectedParcelle);
+            } else {
+                document.getElementById('results').innerHTML = '<p class="no-results">Veuillez sélectionner une section et une parcelle.</p>';
+            }
+        });
+
+        function displayResults(selectedSection, selectedParcelle) {
+            const matchingRecords = dataRecords.filter(record => {
+                const section = record.fields.section || 'null';
+                const parcelle = record.fields.parcelle || 'null';
+                return section === selectedSection && parcelle === selectedParcelle;
+            });
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = ''; // Effacer les résultats précédents
+
+            if (matchingRecords.length > 0) {
+                matchingRecords.forEach(record => {
+                    const fields = record.fields;
+                    const resultItem = document.createElement('div');
+                    resultItem.className = 'result-item';
+
+                    resultItem.innerHTML = `
+                        <h2>${fields.libelle_commune}</h2>
+                        <p><strong>Section :</strong> ${fields.section || 'null'}</p>
+                        <p><strong>Parcelle :</strong> ${fields.parcelle || 'null'}</p>
+                        <p><strong>Taux :</strong> ${fields.taux}%</p>
+                        <p><strong>Date d'effet :</strong> ${fields.date_effet}</p>
+                    `;
+
+                    resultsDiv.appendChild(resultItem);
+                });
+            } else {
+                resultsDiv.innerHTML = '<p class="no-results">Aucun détail trouvé pour la section et la parcelle sélectionnées.</p>';
+            }
+        }
+
+        // Afficher les résultats directement si aucun choix n'est nécessaire
+        function checkDirectDisplay() {
+            if (sections.length === 1) {
+                const singleSection = sections[0];
+                const parcelles = parcelsBySection[singleSection];
+                if (parcelles.length === 1) {
+                    displayResults(singleSection, parcelles[0]);
+                }
+            }
+        }
     </script>
 </body>
 </html>
