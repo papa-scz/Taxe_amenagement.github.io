@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Recherche de Taxe d'Aménagement</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f2f2f2;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            width: 50%;
+            margin: 5% auto;
+            background-color: #fff;
+            padding: 2em;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        form {
+            margin-bottom: 2em;
+        }
+        input[type="text"] {
+            width: 80%;
+            padding: 0.5em;
+            margin-right: 1em;
+            font-size: 1em;
+        }
+        input[type="submit"] {
+            padding: 0.5em 1em;
+            font-size: 1em;
+            cursor: pointer;
+        }
+        .results {
+            margin-top: 2em;
+        }
+        .result-item {
+            background-color: #e9e9e9;
+            padding: 1em;
+            margin-bottom: 1em;
+            border-radius: 5px;
+        }
+        .result-item h2 {
+            margin: 0 0 0.5em 0;
+        }
+        .result-item p {
+            margin: 0.2em 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Recherche de Taxe d'Aménagement</h1>
+        <form id="searchForm">
+            <input type="text" id="cityInput" placeholder="Entrez le nom de la ville" required>
+            <input type="submit" value="Rechercher">
+        </form>
+        <div class="results" id="results"></div>
+    </div>
+
+    <script>
+        document.getElementById('searchForm').addEventListener('submit', function(e){
+            e.preventDefault();
+            const city = document.getElementById('cityInput').value.trim().toUpperCase();
+
+            fetch(`https://data.economie.gouv.fr/api/records/1.0/search/?dataset=taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-a-partir-de-0&q=${city}&rows=20`)
+            .then(response => response.json())
+            .then(data => {
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = ''; // Clear previous results
+
+                if (data.records.length > 0) {
+                    data.records.forEach(record => {
+                        const fields = record.fields;
+                        if (fields.libelle_commune && fields.libelle_commune.toUpperCase() === city) {
+                            const resultItem = document.createElement('div');
+                            resultItem.className = 'result-item';
+
+                            resultItem.innerHTML = `
+                                <h2>${fields.libelle_commune}</h2>
+                                <p><strong>Taux :</strong> ${fields.taux}%</p>
+                                <p><strong>Date d'effet :</strong> ${fields.date_effet}</p>
+                            `;
+
+                            resultsDiv.appendChild(resultItem);
+                        }
+                    });
+
+                    if (resultsDiv.innerHTML === '') {
+                        resultsDiv.innerHTML = '<p>Aucun résultat trouvé pour cette ville.</p>';
+                    }
+                } else {
+                    resultsDiv.innerHTML = '<p>Aucun résultat trouvé pour cette ville.</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                document.getElementById('results').innerHTML = '<p>Une erreur est survenue lors de la recherche.</p>';
+            });
+        });
+    </script>
+</body>
+</html>
