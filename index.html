@@ -5,6 +5,7 @@
     <title>Recherche de Taxe d'Aménagement</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <style>
+        /* Styles existants */
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f0f4f8;
@@ -98,6 +99,11 @@
             padding: 1em;
             margin-bottom: 1em;
             border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .result-item:hover {
+            background-color: #dee2e6;
         }
         .result-item h2 {
             margin: 0 0 0.5em 0;
@@ -111,6 +117,17 @@
             text-align: center;
             color: #dc3545;
             font-weight: bold;
+        }
+        /* Nouveaux styles pour les informations supplémentaires */
+        .additional-info {
+            background-color: #f8f9fa;
+            padding: 1em;
+            margin-top: 1em;
+            border-radius: 8px;
+        }
+        .additional-info p {
+            margin: 0.2em 0;
+            color: #495057;
         }
     </style>
 </head>
@@ -135,6 +152,50 @@
         let dataRecords = [];
         let sections = [];
         let parcelsBySection = {};
+
+        // Variables pour les indices ICC
+        let latestICCIndex = null;
+        let iccIndexJan2024 = null;
+
+        // Récupérer les indices ICC au chargement de la page
+        fetch('https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/000008630', {
+            headers: {
+                'Accept': 'application/xml',
+                // 'Authorization': 'Bearer VOTRE_CLÉ_API'
+            }
+        })
+        .then(response => response.text())
+        .then(str => {
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(str, "application/xml");
+            const observations = xmlDoc.getElementsByTagName("Obs");
+
+            // Extraire le dernier indice ICC
+            if (observations.length > 0) {
+                const latestObs = observations[0];
+                latestICCIndex = parseFloat(latestObs.getAttribute('OBS_VALUE'));
+            }
+
+            // Trouver l'indice ICC publié au 1er janvier 2024 ou juste avant
+            for (let i = 0; i < observations.length; i++) {
+                const obs = observations[i];
+                const dateJO = obs.getAttribute('DATE_JO');
+                const obsValue = parseFloat(obs.getAttribute('OBS_VALUE'));
+                const dateJODate = new Date(dateJO);
+
+                if (dateJODate <= new Date('2024-01-01')) {
+                    iccIndexJan2024 = obsValue;
+                    break;
+                }
+            }
+
+            if (!latestICCIndex || !iccIndexJan2024) {
+                console.error('Impossible de récupérer les indices ICC nécessaires.');
+            }
+        })
+        .catch(error => {
+            console.error('Erreur lors de la récupération des données ICC :', error);
+        });
 
         document.getElementById('searchForm').addEventListener('submit', function(e){
             e.preventDefault();
@@ -223,6 +284,9 @@
                         getResultButton.style.display = 'none';
                     }
                 });
+
+                // Afficher les parcelles pour la première section par défaut
+                populateParcelleDropdown(sectionSelect.value);
             }
 
             selectionDiv.style.display = 'block';
@@ -311,6 +375,40 @@
                     `;
 
                     resultsDiv.appendChild(resultItem);
+
+                    // Ajouter un écouteur d'événement pour afficher les valeurs forfaitaires
+                    resultItem.addEventListener('click', function() {
+                        // Vérifier si les informations supplémentaires sont déjà affichées
+                        if (this.querySelector('.additional-info')) {
+                            // Les informations sont déjà affichées, les supprimer
+                            this.querySelector('.additional-info').remove();
+                        } else {
+                            // Calculer la valeur forfaitaire métrique actualisée
+                            if (latestICCIndex && iccIndexJan2024) {
+                                const valeurForfaitaireMetrique2024 = 914; // Valeur forfaitaire métrique 2024 en euros
+                                const valeurForfaitaireMetriqueActualisee = valeurForfaitaireMetrique2024 * (latestICCIndex / iccIndexJan2024);
+
+                                const additionalInfo = document.createElement('div');
+                                additionalInfo.className = 'additional-info';
+
+                                const valeurForfaitaireStationnement = fields.valeur_forfaitaire_stationnement || 'Non spécifiée';
+
+                                additionalInfo.innerHTML = `
+                                    <p><strong>Valeur forfaitaire stationnement :</strong> ${valeurForfaitaireStationnement}</p>
+                                    <p><strong>Valeur forfaitaire métrique 2024 :</strong> ${valeurForfaitaireMetrique2024.toFixed(2)} €</p>
+                                    <p><strong>Valeur forfaitaire métrique actualisée :</strong> ${valeurForfaitaireMetriqueActualisee.toFixed(2)} €</p>
+                                `;
+
+                                this.appendChild(additionalInfo);
+                            } else {
+                                console.error('Impossible de récupérer les indices ICC nécessaires.');
+                                const errorInfo = document.createElement('div');
+                                errorInfo.className = 'additional-info';
+                                errorInfo.innerHTML = '<p class="no-results">Impossible de calculer les valeurs forfaitaires en raison d\'une erreur lors de la récupération des indices ICC.</p>';
+                                this.appendChild(errorInfo);
+                            }
+                        }
+                    });
                 });
             } else {
                 resultsDiv.innerHTML = '<p class="no-results">Aucun détail trouvé pour la section et la parcelle sélectionnées.</p>';
