@@ -129,6 +129,16 @@
             margin: 0.2em 0;
             color: #495057;
         }
+        /* Nouveaux styles pour l'icône d'information */
+        .info-icon {
+            font-size: 0.9em;
+            margin-left: 5px;
+            color: #007BFF;
+            cursor: pointer;
+        }
+        .info-icon:hover {
+            color: #0056b3;
+        }
     </style>
 </head>
 <body>
@@ -376,7 +386,7 @@
 
                     resultsDiv.appendChild(resultItem);
 
-                    // Ajouter un écouteur d'événement pour afficher les valeurs forfaitaires
+                    // Ajouter un écouteur d'événement pour afficher les informations supplémentaires
                     resultItem.addEventListener('click', function() {
                         // Vérifier si les informations supplémentaires sont déjà affichées
                         if (this.querySelector('.additional-info')) {
@@ -391,12 +401,22 @@
                                 const additionalInfo = document.createElement('div');
                                 additionalInfo.className = 'additional-info';
 
-                                const valeurForfaitaireStationnement = fields.valeur_forfaitaire_stationnement || 'Non spécifiée';
+                                // Gestion de la valeur forfaitaire stationnement
+                                let isValeurForfaitaireStationnementDefault = false;
+                                let valeurForfaitaireStationnement = fields.valeur_forfaitaire_stationnement;
+
+                                if (!valeurForfaitaireStationnement || valeurForfaitaireStationnement === 'Non spécifiée') {
+                                    valeurForfaitaireStationnement = '3000€';
+                                    isValeurForfaitaireStationnementDefault = true;
+                                }
+
+                                // Explication du calcul pour l'indicateur
+                                const calculExplanation = `Méthode de calcul : Valeur métrique 2024 (${valeurForfaitaireMetrique2024.toFixed(2)} €) × (Dernier indice ICC (${latestICCIndex}) ÷ Indice ICC Janvier 2024 (${iccIndexJan2024}))`;
 
                                 additionalInfo.innerHTML = `
-                                    <p><strong>Valeur forfaitaire stationnement :</strong> ${valeurForfaitaireStationnement}</p>
-                                    <p><strong>Valeur forfaitaire métrique 2024 :</strong> ${valeurForfaitaireMetrique2024.toFixed(2)} €</p>
-                                    <p><strong>Valeur forfaitaire métrique actualisée :</strong> ${valeurForfaitaireMetriqueActualisee.toFixed(2)} €</p>
+                                    <p><strong>Valeur forfaitaire stationnement :</strong> ${valeurForfaitaireStationnement}${isValeurForfaitaireStationnementDefault ? ' <span class="info-icon" title="Valeur par défaut car non spécifiée">ℹ️</span>' : ''}</p>
+                                    <p><strong>Valeur forfaitaire métrique 2024 :</strong> ${valeurForfaitaireMetrique2024.toFixed(2)} €</p>
+                                    <p><strong>Valeur forfaitaire métrique actualisée :</strong> ${valeurForfaitaireMetriqueActualisee.toFixed(2)} € <span class="info-icon" title="${calculExplanation}">ℹ️</span></p>
                                 `;
 
                                 this.appendChild(additionalInfo);
@@ -414,6 +434,7 @@
                 resultsDiv.innerHTML = '<p class="no-results">Aucun détail trouvé pour la section et la parcelle sélectionnées.</p>';
             }
         }
+
 
         // Afficher les résultats directement si aucun choix n'est nécessaire
         function checkDirectDisplay() {
