@@ -159,293 +159,297 @@
     </div>
 
     <script>
-        let dataRecords = [];
-        let sections = [];
-        let parcelsBySection = {};
+    let dataRecords = [];
+    let sections = [];
+    let parcelsBySection = {};
 
-        // Variables pour les indices ICC
-        let latestICCIndex = null;
-        let iccIndexJan2024 = null;
+    // Variables pour les indices ICC
+    let latestICCIndex = null;
+    let iccIndexJan2024 = null;
+    let latestICCIndexPeriod = null;
+    let iccIndexJan2024Period = null;
 
-        // Récupérer les indices ICC au chargement de la page
-        fetch('https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/000008630', {
-            headers: {
-                'Accept': 'application/xml',
-                // 'Authorization': 'Bearer VOTRE_CLÉ_API'
+    // Récupérer les indices ICC au chargement de la page
+    fetch('https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/000008630', {
+        headers: {
+            'Accept': 'application/xml',
+            // 'Authorization': 'Bearer VOTRE_CLÉ_API'
+        }
+    })
+    .then(response => response.text())
+    .then(str => {
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(str, "application/xml");
+        const observations = xmlDoc.getElementsByTagName("Obs");
+
+        // Extraire le dernier indice ICC et sa période
+        if (observations.length > 0) {
+            const latestObs = observations[0];
+            latestICCIndex = parseFloat(latestObs.getAttribute('OBS_VALUE'));
+            latestICCIndexPeriod = latestObs.getAttribute('TIME_PERIOD');
+        }
+
+        // Trouver l'indice ICC publié au 1er janvier 2024 ou juste avant et sa période
+        for (let i = 0; i < observations.length; i++) {
+            const obs = observations[i];
+            const dateJO = obs.getAttribute('DATE_JO');
+            const obsValue = parseFloat(obs.getAttribute('OBS_VALUE'));
+            const dateJODate = new Date(dateJO);
+
+            if (dateJODate <= new Date('2024-01-01')) {
+                iccIndexJan2024 = obsValue;
+                iccIndexJan2024Period = obs.getAttribute('TIME_PERIOD');
+                break;
             }
-        })
-        .then(response => response.text())
-        .then(str => {
-            const parser = new DOMParser();
-            const xmlDoc = parser.parseFromString(str, "application/xml");
-            const observations = xmlDoc.getElementsByTagName("Obs");
+        }
 
-            // Extraire le dernier indice ICC
-            if (observations.length > 0) {
-                const latestObs = observations[0];
-                latestICCIndex = parseFloat(latestObs.getAttribute('OBS_VALUE'));
-            }
+        if (!latestICCIndex || !iccIndexJan2024) {
+            console.error('Impossible de récupérer les indices ICC nécessaires.');
+        }
+    })
+    .catch(error => {
+        console.error('Erreur lors de la récupération des données ICC :', error);
+    });
 
-            // Trouver l'indice ICC publié au 1er janvier 2024 ou juste avant
-            for (let i = 0; i < observations.length; i++) {
-                const obs = observations[i];
-                const dateJO = obs.getAttribute('DATE_JO');
-                const obsValue = parseFloat(obs.getAttribute('OBS_VALUE'));
-                const dateJODate = new Date(dateJO);
+    document.getElementById('searchForm').addEventListener('submit', function(e){
+        e.preventDefault();
+        const city = document.getElementById('cityInput').value.trim().toUpperCase();
 
-                if (dateJODate <= new Date('2024-01-01')) {
-                    iccIndexJan2024 = obsValue;
-                    break;
-                }
-            }
+        fetch(`https://data.economie.gouv.fr/api/records/1.0/search/?dataset=taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-a-partir-de-0&rows=1000&q=${city}`)
+        .then(response => response.json())
+        .then(data => {
+            const records = data.records;
+            dataRecords = records.filter(record => record.fields.libelle_commune && record.fields.libelle_commune.toUpperCase() === city);
 
-            if (!latestICCIndex || !iccIndexJan2024) {
-                console.error('Impossible de récupérer les indices ICC nécessaires.');
+            if (dataRecords.length > 0) {
+                prepareData(dataRecords);
+                populateSectionDropdown();
+            } else {
+                document.getElementById('results').innerHTML = '<p class="no-results">Aucun résultat trouvé pour cette commune.</p>';
             }
         })
         .catch(error => {
-            console.error('Erreur lors de la récupération des données ICC :', error);
+            console.error('Erreur:', error);
+            document.getElementById('results').innerHTML = '<p class="no-results">Une erreur est survenue lors de la recherche.</p>';
         });
+    });
 
-        document.getElementById('searchForm').addEventListener('submit', function(e){
-            e.preventDefault();
-            const city = document.getElementById('cityInput').value.trim().toUpperCase();
+    function prepareData(records) {
+        sections = [...new Set(records.map(record => record.fields.section || 'null'))];
 
-            fetch(`https://data.economie.gouv.fr/api/records/1.0/search/?dataset=taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-a-partir-de-0&rows=1000&q=${city}`)
-            .then(response => response.json())
-            .then(data => {
-                const records = data.records;
-                dataRecords = records.filter(record => record.fields.libelle_commune && record.fields.libelle_commune.toUpperCase() === city);
+        // Trier les sections pour mettre 'null' en premier
+        sections.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
 
-                if (dataRecords.length > 0) {
-                    prepareData(dataRecords);
-                    populateSectionDropdown();
-                } else {
-                    document.getElementById('results').innerHTML = '<p class="no-results">Aucun résultat trouvé pour cette commune.</p>';
-                }
-            })
-            .catch(error => {
-                console.error('Erreur:', error);
-                document.getElementById('results').innerHTML = '<p class="no-results">Une erreur est survenue lors de la recherche.</p>';
-            });
+        parcelsBySection = {};
+        sections.forEach(section => {
+            const parcels = [...new Set(records
+                .filter(record => (record.fields.section || 'null') === section)
+                .map(record => record.fields.parcelle || 'null'))];
+
+            // Trier les parcelles pour mettre 'null' en premier
+            parcels.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
+
+            parcelsBySection[section] = parcels;
         });
+    }
 
-        function prepareData(records) {
-            sections = [...new Set(records.map(record => record.fields.section || 'null'))];
+    function populateSectionDropdown() {
+        const sectionSelect = document.getElementById('sectionSelect');
+        const parcelleSelect = document.getElementById('parcelleSelect');
+        const selectionDiv = document.getElementById('selection');
+        const sectionLabel = document.getElementById('sectionLabel');
+        const parcelleLabel = document.getElementById('parcelleLabel');
+        const getResultButton = document.getElementById('getResult');
 
-            // Trier les sections pour mettre 'null' en premier
-            sections.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
+        // Réinitialiser les sélections précédentes
+        sectionSelect.innerHTML = '';
+        parcelleSelect.innerHTML = '';
+        document.getElementById('results').innerHTML = '';
 
-            parcelsBySection = {};
+        if (sections.length === 1) {
+            // S'il n'y a qu'une seule section, ne pas afficher le menu de sélection
+            sectionLabel.style.display = 'none';
+            sectionSelect.style.display = 'none';
+
+            const singleSection = sections[0];
+            populateParcelleDropdown(singleSection);
+        } else {
+            // Afficher le menu de sélection des sections
+            sectionLabel.style.display = 'inline';
+            sectionSelect.style.display = 'inline';
+
+            // Ajouter les options au menu déroulant des sections
             sections.forEach(section => {
-                const parcels = [...new Set(records
-                    .filter(record => (record.fields.section || 'null') === section)
-                    .map(record => record.fields.parcelle || 'null'))];
-
-                // Trier les parcelles pour mettre 'null' en premier
-                parcels.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
-
-                parcelsBySection[section] = parcels;
+                const option = document.createElement('option');
+                option.value = section;
+                option.textContent = section;
+                sectionSelect.appendChild(option);
             });
+
+            // Ajouter un écouteur d'événement pour mettre à jour les parcelles en fonction de la section sélectionnée
+            sectionSelect.addEventListener('change', function() {
+                const selectedSection = sectionSelect.value;
+                if (selectedSection) {
+                    populateParcelleDropdown(selectedSection);
+                } else {
+                    parcelleSelect.innerHTML = '';
+                    parcelleSelect.style.display = 'none';
+                    parcelleLabel.style.display = 'none';
+                    getResultButton.style.display = 'none';
+                }
+            });
+
+            // Afficher les parcelles pour la première section par défaut
+            populateParcelleDropdown(sectionSelect.value);
         }
 
-        function populateSectionDropdown() {
-            const sectionSelect = document.getElementById('sectionSelect');
-            const parcelleSelect = document.getElementById('parcelleSelect');
-            const selectionDiv = document.getElementById('selection');
-            const sectionLabel = document.getElementById('sectionLabel');
-            const parcelleLabel = document.getElementById('parcelleLabel');
-            const getResultButton = document.getElementById('getResult');
+        selectionDiv.style.display = 'block';
 
-            // Réinitialiser les sélections précédentes
-            sectionSelect.innerHTML = '';
-            parcelleSelect.innerHTML = '';
-            document.getElementById('results').innerHTML = '';
+        // Masquer le bouton si aucun choix n'est nécessaire
+        if (sections.length === 1 && parcelsBySection[sections[0]].length === 1) {
+            getResultButton.style.display = 'none';
+        } else {
+            getResultButton.style.display = 'inline-block';
+        }
+    }
 
-            if (sections.length === 1) {
-                // S'il n'y a qu'une seule section, ne pas afficher le menu de sélection
-                sectionLabel.style.display = 'none';
-                sectionSelect.style.display = 'none';
+    function populateParcelleDropdown(section) {
+        const parcelleSelect = document.getElementById('parcelleSelect');
+        const parcelleLabel = document.getElementById('parcelleLabel');
+        const getResultButton = document.getElementById('getResult');
 
-                const singleSection = sections[0];
-                populateParcelleDropdown(singleSection);
-            } else {
-                // Afficher le menu de sélection des sections
-                sectionLabel.style.display = 'inline';
-                sectionSelect.style.display = 'inline';
+        const parcelles = parcelsBySection[section];
 
-                // Ajouter les options au menu déroulant des sections
-                sections.forEach(section => {
-                    const option = document.createElement('option');
-                    option.value = section;
-                    option.textContent = section;
-                    sectionSelect.appendChild(option);
-                });
+        parcelleSelect.innerHTML = '';
+        parcelleSelect.style.display = 'inline-block';
+        parcelleLabel.style.display = 'inline';
 
-                // Ajouter un écouteur d'événement pour mettre à jour les parcelles en fonction de la section sélectionnée
-                sectionSelect.addEventListener('change', function() {
-                    const selectedSection = sectionSelect.value;
-                    if (selectedSection) {
-                        populateParcelleDropdown(selectedSection);
+        if (parcelles.length === 1) {
+            // S'il n'y a qu'une seule parcelle, ne pas afficher le menu de sélection
+            parcelleSelect.style.display = 'none';
+            parcelleLabel.style.display = 'none';
+
+            // Afficher directement les résultats
+            displayResults(section, parcelles[0]);
+        } else {
+            // Ajouter les options au menu déroulant des parcelles
+            parcelles.forEach(parcelle => {
+                const option = document.createElement('option');
+                option.value = parcelle;
+                option.textContent = parcelle;
+                parcelleSelect.appendChild(option);
+            });
+
+            // Afficher le bouton si des choix sont à faire
+            getResultButton.style.display = 'inline-block';
+        }
+
+        // Masquer le bouton si aucun choix n'est nécessaire
+        if (sections.length === 1 && parcelles.length === 1) {
+            getResultButton.style.display = 'none';
+        }
+    }
+
+    document.getElementById('getResult').addEventListener('click', function(){
+        const sectionSelect = document.getElementById('sectionSelect');
+        const parcelleSelect = document.getElementById('parcelleSelect');
+
+        const selectedSection = sectionSelect.value || (sections.length === 1 ? sections[0] : null);
+        const selectedParcelle = parcelleSelect.value || (parcelsBySection[selectedSection].length === 1 ? parcelsBySection[selectedSection][0] : null);
+
+        if (selectedSection && selectedParcelle) {
+            displayResults(selectedSection, selectedParcelle);
+        } else {
+            document.getElementById('results').innerHTML = '<p class="no-results">Veuillez sélectionner une section et une parcelle.</p>';
+        }
+    });
+
+    function displayResults(selectedSection, selectedParcelle) {
+        const matchingRecords = dataRecords.filter(record => {
+            const section = record.fields.section || 'null';
+            const parcelle = record.fields.parcelle || 'null';
+            return section === selectedSection && parcelle === selectedParcelle;
+        });
+
+        const resultsDiv = document.getElementById('results');
+        resultsDiv.innerHTML = ''; // Effacer les résultats précédents
+
+        if (matchingRecords.length > 0) {
+            matchingRecords.forEach(record => {
+                const fields = record.fields;
+                const resultItem = document.createElement('div');
+                resultItem.className = 'result-item';
+
+                resultItem.innerHTML = `
+                    <h2>${fields.libelle_commune}</h2>
+                    <p><strong>Section :</strong> ${fields.section || 'null'}</p>
+                    <p><strong>Parcelle :</strong> ${fields.parcelle || 'null'}</p>
+                    <p><strong>Taux :</strong> ${fields.taux}%</p>
+                    <p><strong>Date d'effet :</strong> ${fields.date_effet}</p>
+                `;
+
+                resultsDiv.appendChild(resultItem);
+
+                // Ajouter un écouteur d'événement pour afficher les informations supplémentaires
+                resultItem.addEventListener('click', function() {
+                    // Vérifier si les informations supplémentaires sont déjà affichées
+                    if (this.querySelector('.additional-info')) {
+                        // Les informations sont déjà affichées, les supprimer
+                        this.querySelector('.additional-info').remove();
                     } else {
-                        parcelleSelect.innerHTML = '';
-                        parcelleSelect.style.display = 'none';
-                        parcelleLabel.style.display = 'none';
-                        getResultButton.style.display = 'none';
+                        // Calculer la valeur forfaitaire métrique actualisée
+                        if (latestICCIndex && iccIndexJan2024) {
+                            const valeurForfaitaireMetrique2024 = 914; // Valeur forfaitaire métrique 2024 en euros
+                            const valeurForfaitaireMetriqueActualisee = valeurForfaitaireMetrique2024 * (latestICCIndex / iccIndexJan2024);
+
+                            const additionalInfo = document.createElement('div');
+                            additionalInfo.className = 'additional-info';
+
+                            // Gestion de la valeur forfaitaire stationnement
+                            let isValeurForfaitaireStationnementDefault = false;
+                            let valeurForfaitaireStationnement = fields.valeur_forfaitaire_stationnement;
+
+                            if (!valeurForfaitaireStationnement || valeurForfaitaireStationnement === 'Non spécifiée') {
+                                valeurForfaitaireStationnement = '3000€';
+                                isValeurForfaitaireStationnementDefault = true;
+                            }
+
+                            // Explication du calcul pour l'indicateur avec les périodes
+                            const calculExplanation = `Méthode de calcul : Valeur métrique 2024 (${valeurForfaitaireMetrique2024.toFixed(2)} €) × (ICC ${latestICCIndexPeriod} (${latestICCIndex}) ÷ ICC ${iccIndexJan2024Period} (${iccIndexJan2024}))`;
+
+                            additionalInfo.innerHTML = `
+                                <p><strong>Valeur forfaitaire stationnement :</strong> ${valeurForfaitaireStationnement}${isValeurForfaitaireStationnementDefault ? ' <span class="info-icon" title="Valeur par défaut car non spécifiée">ℹ️</span>' : ''}</p>
+                                <p><strong>Valeur forfaitaire métrique 2024 :</strong> ${valeurForfaitaireMetrique2024.toFixed(2)} €</p>
+                                <p><strong>Valeur forfaitaire métrique actualisée :</strong> ${valeurForfaitaireMetriqueActualisee.toFixed(2)} € <span class="info-icon" title="${calculExplanation}">ℹ️</span></p>
+                            `;
+
+                            this.appendChild(additionalInfo);
+                        } else {
+                            console.error('Impossible de récupérer les indices ICC nécessaires.');
+                            const errorInfo = document.createElement('div');
+                            errorInfo.className = 'additional-info';
+                            errorInfo.innerHTML = '<p class="no-results">Impossible de calculer les valeurs forfaitaires en raison d\'une erreur lors de la récupération des indices ICC.</p>';
+                            this.appendChild(errorInfo);
+                        }
                     }
                 });
-
-                // Afficher les parcelles pour la première section par défaut
-                populateParcelleDropdown(sectionSelect.value);
-            }
-
-            selectionDiv.style.display = 'block';
-
-            // Masquer le bouton si aucun choix n'est nécessaire
-            if (sections.length === 1 && parcelsBySection[sections[0]].length === 1) {
-                getResultButton.style.display = 'none';
-            } else {
-                getResultButton.style.display = 'inline-block';
-            }
-        }
-
-        function populateParcelleDropdown(section) {
-            const parcelleSelect = document.getElementById('parcelleSelect');
-            const parcelleLabel = document.getElementById('parcelleLabel');
-            const getResultButton = document.getElementById('getResult');
-
-            const parcelles = parcelsBySection[section];
-
-            parcelleSelect.innerHTML = '';
-            parcelleSelect.style.display = 'inline-block';
-            parcelleLabel.style.display = 'inline';
-
-            if (parcelles.length === 1) {
-                // S'il n'y a qu'une seule parcelle, ne pas afficher le menu de sélection
-                parcelleSelect.style.display = 'none';
-                parcelleLabel.style.display = 'none';
-
-                // Afficher directement les résultats
-                displayResults(section, parcelles[0]);
-            } else {
-                // Ajouter les options au menu déroulant des parcelles
-                parcelles.forEach(parcelle => {
-                    const option = document.createElement('option');
-                    option.value = parcelle;
-                    option.textContent = parcelle;
-                    parcelleSelect.appendChild(option);
-                });
-
-                // Afficher le bouton si des choix sont à faire
-                getResultButton.style.display = 'inline-block';
-            }
-
-            // Masquer le bouton si aucun choix n'est nécessaire
-            if (sections.length === 1 && parcelles.length === 1) {
-                getResultButton.style.display = 'none';
-            }
-        }
-
-        document.getElementById('getResult').addEventListener('click', function(){
-            const sectionSelect = document.getElementById('sectionSelect');
-            const parcelleSelect = document.getElementById('parcelleSelect');
-
-            const selectedSection = sectionSelect.value || (sections.length === 1 ? sections[0] : null);
-            const selectedParcelle = parcelleSelect.value || (parcelsBySection[selectedSection].length === 1 ? parcelsBySection[selectedSection][0] : null);
-
-            if (selectedSection && selectedParcelle) {
-                displayResults(selectedSection, selectedParcelle);
-            } else {
-                document.getElementById('results').innerHTML = '<p class="no-results">Veuillez sélectionner une section et une parcelle.</p>';
-            }
-        });
-
-        function displayResults(selectedSection, selectedParcelle) {
-            const matchingRecords = dataRecords.filter(record => {
-                const section = record.fields.section || 'null';
-                const parcelle = record.fields.parcelle || 'null';
-                return section === selectedSection && parcelle === selectedParcelle;
             });
+        } else {
+            resultsDiv.innerHTML = '<p class="no-results">Aucun détail trouvé pour la section et la parcelle sélectionnées.</p>';
+        }
+    }
 
-            const resultsDiv = document.getElementById('results');
-            resultsDiv.innerHTML = ''; // Effacer les résultats précédents
-
-            if (matchingRecords.length > 0) {
-                matchingRecords.forEach(record => {
-                    const fields = record.fields;
-                    const resultItem = document.createElement('div');
-                    resultItem.className = 'result-item';
-
-                    resultItem.innerHTML = `
-                        <h2>${fields.libelle_commune}</h2>
-                        <p><strong>Section :</strong> ${fields.section || 'null'}</p>
-                        <p><strong>Parcelle :</strong> ${fields.parcelle || 'null'}</p>
-                        <p><strong>Taux :</strong> ${fields.taux}%</p>
-                        <p><strong>Date d'effet :</strong> ${fields.date_effet}</p>
-                    `;
-
-                    resultsDiv.appendChild(resultItem);
-
-                    // Ajouter un écouteur d'événement pour afficher les informations supplémentaires
-                    resultItem.addEventListener('click', function() {
-                        // Vérifier si les informations supplémentaires sont déjà affichées
-                        if (this.querySelector('.additional-info')) {
-                            // Les informations sont déjà affichées, les supprimer
-                            this.querySelector('.additional-info').remove();
-                        } else {
-                            // Calculer la valeur forfaitaire métrique actualisée
-                            if (latestICCIndex && iccIndexJan2024) {
-                                const valeurForfaitaireMetrique2024 = 914; // Valeur forfaitaire métrique 2024 en euros
-                                const valeurForfaitaireMetriqueActualisee = valeurForfaitaireMetrique2024 * (latestICCIndex / iccIndexJan2024);
-
-                                const additionalInfo = document.createElement('div');
-                                additionalInfo.className = 'additional-info';
-
-                                // Gestion de la valeur forfaitaire stationnement
-                                let isValeurForfaitaireStationnementDefault = false;
-                                let valeurForfaitaireStationnement = fields.valeur_forfaitaire_stationnement;
-
-                                if (!valeurForfaitaireStationnement || valeurForfaitaireStationnement === 'Non spécifiée') {
-                                    valeurForfaitaireStationnement = '3000€';
-                                    isValeurForfaitaireStationnementDefault = true;
-                                }
-
-                                // Explication du calcul pour l'indicateur
-                                const calculExplanation = `Méthode de calcul : Valeur métrique 2024 (${valeurForfaitaireMetrique2024.toFixed(2)} €) × (Dernier indice ICC (${latestICCIndex}) ÷ Indice ICC Janvier 2024 (${iccIndexJan2024}))`;
-
-                                additionalInfo.innerHTML = `
-                                    <p><strong>Valeur forfaitaire stationnement :</strong> ${valeurForfaitaireStationnement}${isValeurForfaitaireStationnementDefault ? ' <span class="info-icon" title="Valeur par défaut car non spécifiée">ℹ️</span>' : ''}</p>
-                                    <p><strong>Valeur forfaitaire métrique 2024 :</strong> ${valeurForfaitaireMetrique2024.toFixed(2)} €</p>
-                                    <p><strong>Valeur forfaitaire métrique actualisée :</strong> ${valeurForfaitaireMetriqueActualisee.toFixed(2)} € <span class="info-icon" title="${calculExplanation}">ℹ️</span></p>
-                                `;
-
-                                this.appendChild(additionalInfo);
-                            } else {
-                                console.error('Impossible de récupérer les indices ICC nécessaires.');
-                                const errorInfo = document.createElement('div');
-                                errorInfo.className = 'additional-info';
-                                errorInfo.innerHTML = '<p class="no-results">Impossible de calculer les valeurs forfaitaires en raison d\'une erreur lors de la récupération des indices ICC.</p>';
-                                this.appendChild(errorInfo);
-                            }
-                        }
-                    });
-                });
-            } else {
-                resultsDiv.innerHTML = '<p class="no-results">Aucun détail trouvé pour la section et la parcelle sélectionnées.</p>';
+    // Afficher les résultats directement si aucun choix n'est nécessaire
+    function checkDirectDisplay() {
+        if (sections.length === 1) {
+            const singleSection = sections[0];
+            const parcelles = parcelsBySection[singleSection];
+            if (parcelles.length === 1) {
+                displayResults(singleSection, parcelles[0]);
             }
         }
+    }
+</script>
 
-
-        // Afficher les résultats directement si aucun choix n'est nécessaire
-        function checkDirectDisplay() {
-            if (sections.length === 1) {
-                const singleSection = sections[0];
-                const parcelles = parcelsBySection[singleSection];
-                if (parcelles.length === 1) {
-                    displayResults(singleSection, parcelles[0]);
-                }
-            }
-        }
-    </script>
 </body>
 </html>
