@@ -29,7 +29,7 @@
         form {
             display: flex;
             justify-content: center;
-            margin-bottom: 2em;
+            margin-bottom: 1em;
         }
         input[type="text"] {
             width: 70%;
@@ -56,6 +56,23 @@
         }
         input[type="submit"]:hover {
             background-color: #0056b3;
+        }
+        /* Style pour la liste de suggestions */
+        #suggestions {
+            list-style-type: none;
+            padding: 0;
+            margin: 0 0 1em 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #suggestions li {
+            padding: 8px;
+            cursor: pointer;
+        }
+        #suggestions li:hover {
+            background-color: #f0f0f0;
         }
         .selection {
             margin-top: 2em;
@@ -148,6 +165,9 @@
             <input type="text" id="cityInput" placeholder="Entrez le nom de la commune" required>
             <input type="submit" value="Rechercher">
         </form>
+        <!-- Zone pour afficher les suggestions de communes -->
+        <ul id="suggestions"></ul>
+
         <div class="selection" id="selection" style="display: none;">
             <label for="sectionSelect" id="sectionLabel">Section :</label>
             <select id="sectionSelect"></select>
@@ -165,9 +185,9 @@
 
     // Variables pour les indices ICC
     let latestICCIndex = null;
-    let iccIndexJan2024 = null;
+    let iccIndexJan2025 = null;
     let latestICCIndexPeriod = null;
-    let iccIndexJan2024Period = null;
+    let iccIndexJan2025Period = null;
 
     // Récupérer les indices ICC au chargement de la page
     fetch('https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/000008630', {
@@ -189,21 +209,21 @@
             latestICCIndexPeriod = latestObs.getAttribute('TIME_PERIOD');
         }
 
-        // Trouver l'indice ICC publié au 1er janvier 2024 ou juste avant et sa période
+        // Trouver l'indice ICC publié au 1er janvier 2025 ou juste avant et sa période
         for (let i = 0; i < observations.length; i++) {
             const obs = observations[i];
             const dateJO = obs.getAttribute('DATE_JO');
             const obsValue = parseFloat(obs.getAttribute('OBS_VALUE'));
             const dateJODate = new Date(dateJO);
 
-            if (dateJODate <= new Date('2024-01-01')) {
-                iccIndexJan2024 = obsValue;
-                iccIndexJan2024Period = obs.getAttribute('TIME_PERIOD');
+            if (dateJODate <= new Date('2025-01-01')) {
+                iccIndexJan2025 = obsValue;
+                iccIndexJan2025Period = obs.getAttribute('TIME_PERIOD');
                 break;
             }
         }
 
-        if (!latestICCIndex || !iccIndexJan2024) {
+        if (!latestICCIndex || !iccIndexJan2025) {
             console.error('Impossible de récupérer les indices ICC nécessaires.');
         }
     })
@@ -211,28 +231,70 @@
         console.error('Erreur lors de la récupération des données ICC :', error);
     });
 
+    // Événement sur le formulaire : au clic sur "Rechercher"
     document.getElementById('searchForm').addEventListener('submit', function(e){
         e.preventDefault();
-        const city = document.getElementById('cityInput').value.trim().toUpperCase();
+        const searchTerm = document.getElementById('cityInput').value.trim();
+        if (searchTerm === "") return;
 
-        fetch(`https://data.economie.gouv.fr/api/records/1.0/search/?dataset=taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-a-partir-de-0&rows=1000&q=${city}`)
-        .then(response => response.json())
-        .then(data => {
-            const records = data.records;
-            dataRecords = records.filter(record => record.fields.libelle_commune && record.fields.libelle_commune.toUpperCase() === city);
-
-            if (dataRecords.length > 0) {
-                prepareData(dataRecords);
-                populateSectionDropdown();
-            } else {
-                document.getElementById('results').innerHTML = '<p class="no-results">Aucun résultat trouvé pour cette commune.</p>';
-            }
-        })
-        .catch(error => {
-            console.error('Erreur:', error);
-            document.getElementById('results').innerHTML = '<p class="no-results">Une erreur est survenue lors de la recherche.</p>';
-        });
+        // Appel à l'API pour récupérer les facettes (jusqu'à 20 communes)
+        const facetUrl = `https://data.economie.gouv.fr/api/records/1.0/search/?dataset=taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2023-2024-copie&rows=0&q=${encodeURIComponent(searchTerm)}&facet=libelle_commune&facet.limit=20&facet.sort=name`;
+        fetch(facetUrl)
+            .then(response => response.json())
+            .then(data => {
+                const facets = data.facet_groups && data.facet_groups[0] && data.facet_groups[0].facets;
+                if (facets && facets.length > 0) {
+                    displayCommuneSuggestions(facets.map(item => item.name));
+                } else {
+                    document.getElementById('suggestions').innerHTML = '<li>Aucune commune trouvée pour ce critère.</li>';
+                }
+            })
+            .catch(error => {
+                console.error('Erreur lors de la récupération des communes :', error);
+                document.getElementById('suggestions').innerHTML = '<li>Erreur lors de la recherche.</li>';
+            });
     });
+
+    // Fonction pour afficher les suggestions de communes
+    function displayCommuneSuggestions(communes) {
+        const suggestionsList = document.getElementById('suggestions');
+        suggestionsList.innerHTML = ''; // Réinitialiser les suggestions
+        communes.forEach(commune => {
+            const li = document.createElement('li');
+            li.textContent = commune;
+            li.addEventListener('click', function() {
+                // Lorsqu'une commune est sélectionnée, on remplit le champ et on lance la recherche détaillée
+                document.getElementById('cityInput').value = commune;
+                suggestionsList.innerHTML = '';
+                loadCommuneDetails(commune);
+            });
+            suggestionsList.appendChild(li);
+        });
+    }
+
+    // Fonction pour charger les détails de la commune sélectionnée
+    function loadCommuneDetails(commune) {
+        const city = commune.toUpperCase();
+        // Appel à l'API pour obtenir les enregistrements détaillés de la commune
+        const urlDetails = `https://data.economie.gouv.fr/api/records/1.0/search/?dataset=taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2023-2024-copie&rows=1000&q=${encodeURIComponent(city)}`;
+        fetch(urlDetails)
+            .then(response => response.json())
+            .then(data => {
+                const records = data.records;
+                // Filtrer les enregistrements pour s'assurer que le nom de commune correspond exactement
+                dataRecords = records.filter(record => record.fields.libelle_commune && record.fields.libelle_commune.toUpperCase() === city);
+                if (dataRecords.length > 0) {
+                    prepareData(dataRecords);
+                    populateSectionDropdown();
+                } else {
+                    document.getElementById('results').innerHTML = '<p class="no-results">Aucun résultat trouvé pour cette commune.</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                document.getElementById('results').innerHTML = '<p class="no-results">Une erreur est survenue lors de la recherche.</p>';
+            });
+    }
 
     function prepareData(records) {
         sections = [...new Set(records.map(record => record.fields.section || 'null'))];
@@ -246,8 +308,13 @@
                 .filter(record => (record.fields.section || 'null') === section)
                 .map(record => record.fields.parcelle || 'null'))];
 
-            // Trier les parcelles pour mettre 'null' en premier
-            parcels.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
+            // Trier les parcelles : 'null' en premier, puis en ordre croissant (numérique)
+            parcels.sort((a, b) => {
+                if (a === 'null' && b === 'null') return 0;
+                if (a === 'null') return -1;
+                if (b === 'null') return 1;
+                return parseFloat(a) - parseFloat(b);
+            });
 
             parcelsBySection[section] = parcels;
         });
@@ -397,35 +464,32 @@
                         // Les informations sont déjà affichées, les supprimer
                         this.querySelector('.additional-info').remove();
                     } else {
-                        // Calculer la valeur forfaitaire métrique actualisée
-                        if (latestICCIndex && iccIndexJan2024) {
-                            const valeurForfaitaireMetrique2024 = 914; // Valeur forfaitaire métrique 2024 en euros
-                            const valeurForfaitaireMetriqueActualisee = valeurForfaitaireMetrique2024 * (latestICCIndex / iccIndexJan2024);
+                        // Calcul de la valeur forfaitaire métrique actualisée
+                        if (latestICCIndex && iccIndexJan2025) {
+                            const valeurForfaitaireMetrique2025 = 930; // Valeur forfaitaire métrique 2025 en euros
+                            const valeurForfaitaireMetriqueActualisee = valeurForfaitaireMetrique2025 * (latestICCIndex / iccIndexJan2025);
 
-                            const additionalInfo = document.createElement('div');
-                            additionalInfo.className = 'additional-info';
-
-                            // Gestion de la valeur forfaitaire stationnement
+                            // Gestion de la valeur forfaitaire stationnement (inchangée)
                             let isValeurForfaitaireStationnementDefault = false;
                             let valeurForfaitaireStationnement = fields.valeur_forfaitaire_stationnement;
-
                             if (!valeurForfaitaireStationnement || valeurForfaitaireStationnement === 'Non spécifiée') {
                                 valeurForfaitaireStationnement = '3000€';
                                 isValeurForfaitaireStationnementDefault = true;
                             }
 
-                            // Explication du calcul pour l'indicateur avec les périodes
-                            const calculExplanation = `Méthode de calcul : Valeur métrique 2024 (${valeurForfaitaireMetrique2024.toFixed(2)} €) × (ICC ${latestICCIndexPeriod} (${latestICCIndex}) ÷ ICC ${iccIndexJan2024Period} (${iccIndexJan2024}))`;
+                            // Infobulle mise à jour avec les informations 2025
+                            const calculExplanation = `Méthode de calcul : Valeur métrique 2025 (${valeurForfaitaireMetrique2025.toFixed(2)} €) × (ICC ${latestICCIndexPeriod} (${latestICCIndex}) ÷ ICC ${iccIndexJan2025Period} (${iccIndexJan2025}))`;
 
+                            const additionalInfo = document.createElement('div');
+                            additionalInfo.className = 'additional-info';
                             additionalInfo.innerHTML = `
                                 <p><strong>Valeur forfaitaire stationnement :</strong> ${valeurForfaitaireStationnement}${isValeurForfaitaireStationnementDefault ? ' <span class="info-icon" title="Valeur par défaut car non spécifiée">ℹ️</span>' : ''}</p>
-                                <p><strong>Valeur forfaitaire métrique 2024 :</strong> ${valeurForfaitaireMetrique2024.toFixed(2)} €</p>
+                                <p><strong>Valeur forfaitaire métrique 2025 :</strong> ${valeurForfaitaireMetrique2025.toFixed(2)} €</p>
                                 <p><strong>Valeur forfaitaire métrique actualisée :</strong> ${valeurForfaitaireMetriqueActualisee.toFixed(2)} € <span class="info-icon" title="${calculExplanation}">ℹ️</span></p>
                             `;
-
                             this.appendChild(additionalInfo);
                         } else {
-                            console.error('Impossible de récupérer les indices ICC nécessaires.');
+                            // Gestion de l'erreur si l'ICC n'est pas disponible
                             const errorInfo = document.createElement('div');
                             errorInfo.className = 'additional-info';
                             errorInfo.innerHTML = '<p class="no-results">Impossible de calculer les valeurs forfaitaires en raison d\'une erreur lors de la récupération des indices ICC.</p>';
@@ -438,18 +502,7 @@
             resultsDiv.innerHTML = '<p class="no-results">Aucun détail trouvé pour la section et la parcelle sélectionnées.</p>';
         }
     }
-
-    // Afficher les résultats directement si aucun choix n'est nécessaire
-    function checkDirectDisplay() {
-        if (sections.length === 1) {
-            const singleSection = sections[0];
-            const parcelles = parcelsBySection[singleSection];
-            if (parcelles.length === 1) {
-                displayResults(singleSection, parcelles[0]);
-            }
-        }
-    }
-</script>
+    </script>
 
 </body>
 </html>
