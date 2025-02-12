@@ -236,23 +236,29 @@ fetch('https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/000008630', {
     });
 
     function prepareData(records) {
-        sections = [...new Set(records.map(record => record.fields.section || 'null'))];
+    sections = [...new Set(records.map(record => record.fields.section || 'null'))];
 
-        // Trier les sections pour mettre 'null' en premier
-        sections.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
+    // Trier les sections pour mettre 'null' en premier
+    sections.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
 
-        parcelsBySection = {};
-        sections.forEach(section => {
-            const parcels = [...new Set(records
-                .filter(record => (record.fields.section || 'null') === section)
-                .map(record => record.fields.parcelle || 'null'))];
+    parcelsBySection = {};
+    sections.forEach(section => {
+        const parcels = [...new Set(records
+            .filter(record => (record.fields.section || 'null') === section)
+            .map(record => record.fields.parcelle || 'null'))];
 
-            // Trier les parcelles pour mettre 'null' en premier
-            parcels.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
-
-            parcelsBySection[section] = parcels;
+        // Trier les parcelles : 'null' en premier, puis en ordre croissant (numérique)
+        parcels.sort((a, b) => {
+            if (a === 'null' && b === 'null') return 0;
+            if (a === 'null') return -1;
+            if (b === 'null') return 1;
+            return parseFloat(a) - parseFloat(b);
         });
-    }
+
+        parcelsBySection[section] = parcels;
+    });
+}
+
 
     function populateSectionDropdown() {
         const sectionSelect = document.getElementById('sectionSelect');
