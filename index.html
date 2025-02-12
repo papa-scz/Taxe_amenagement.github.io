@@ -145,9 +145,11 @@
     <div class="container">
         <h1>Recherche de Taxe d'Aménagement</h1>
         <form id="searchForm">
-            <input type="text" id="cityInput" placeholder="Entrez le nom de la commune" required>
+            <input type="text" id="cityInput" placeholder="Entrez le nom de la commune" list="communeList" required>
+            <datalist id="communeList"></datalist>
             <input type="submit" value="Rechercher">
         </form>
+
         <div class="selection" id="selection" style="display: none;">
             <label for="sectionSelect" id="sectionLabel">Section :</label>
             <select id="sectionSelect"></select>
@@ -211,6 +213,30 @@ fetch('https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/000008630', {
     console.error('Erreur lors de la récupération des données ICC :', error);
 });
 
+        // Fonction pour récupérer et remplir la liste des communes
+        function populateCommunesList() {
+            fetch('https://data.economie.gouv.fr/api/records/1.0/search/?dataset=taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2023-2024-copie&rows=1000')
+                .then(response => response.json())
+                .then(data => {
+                    const records = data.records;
+                    // Extraire les noms de communes ; ici on suppose que le champ s'appelle "libelle_commune"
+                    const communes = [...new Set(records
+                        .map(record => record.fields.libelle_commune)
+                        .filter(nom => nom))];
+        
+                    // Remplir le datalist
+                    const datalist = document.getElementById('communeList');
+                    communes.forEach(commune => {
+                        const option = document.createElement('option');
+                        option.value = commune;
+                        datalist.appendChild(option);
+                    });
+                })
+                .catch(error => console.error("Erreur lors de la récupération des communes :", error));
+        }
+        
+        // Appeler la fonction dès le chargement du script pour pré-remplir le datalist
+        populateCommunesList();
 
     document.getElementById('searchForm').addEventListener('submit', function(e){
         e.preventDefault();
