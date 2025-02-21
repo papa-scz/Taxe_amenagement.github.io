@@ -297,28 +297,34 @@
     }
 
     function prepareData(records) {
-        sections = [...new Set(records.map(record => record.fields.section || 'null'))];
+    // On utilise 'null' comme valeur par défaut pour les sections non définies
+    sections = [...new Set(records.map(record => record.fields.section || 'null'))];
 
-        // Trier les sections pour mettre 'null' en premier
-        sections.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
-
-        parcelsBySection = {};
-        sections.forEach(section => {
-            const parcels = [...new Set(records
-                .filter(record => (record.fields.section || 'null') === section)
-                .map(record => record.fields.parcelle || 'null'))];
-
-            // Trier les parcelles : 'null' en premier, puis en ordre croissant (numérique)
-            parcels.sort((a, b) => {
-                if (a === 'null' && b === 'null') return 0;
-                if (a === 'null') return -1;
-                if (b === 'null') return 1;
-                return parseFloat(a) - parseFloat(b);
-            });
-
-            parcelsBySection[section] = parcels;
-        });
+    // Si aucune section "null" n'est présente, on l'ajoute
+    if (!sections.includes('null')) {
+        sections.unshift('null'); // On ajoute au début pour que ce soit prioritaire
     }
+
+    // Trier les sections pour mettre 'null' en premier (facultatif si vous l'ajoutez en début)
+    sections.sort((a, b) => a === 'null' ? -1 : b === 'null' ? 1 : 0);
+
+    parcelsBySection = {};
+    sections.forEach(section => {
+        const parcels = [...new Set(records
+            .filter(record => (record.fields.section || 'null') === section)
+            .map(record => record.fields.parcelle || 'null'))];
+
+        parcels.sort((a, b) => {
+            if (a === 'null' && b === 'null') return 0;
+            if (a === 'null') return -1;
+            if (b === 'null') return 1;
+            return parseFloat(a) - parseFloat(b);
+        });
+
+        parcelsBySection[section] = parcels;
+    });
+}
+
 
     function populateSectionDropdown() {
         const sectionSelect = document.getElementById('sectionSelect');
