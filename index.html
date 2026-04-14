@@ -182,6 +182,13 @@
     let dataRecords = [];
     let sections = [];
     let parcelsBySection = {};
+    let activeDataset = null;
+
+    const DATASET_CANDIDATES = [
+        'taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2025-2026',
+        'taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2025-2026-copie',
+        'taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2023-2024-copie'
+    ];
 
     // Variables pour les indices ICC
     let latestICCIndex = null;
@@ -231,20 +238,68 @@
         console.error('Erreur lors de la récupération des données ICC :', error);
     });
 
+    function buildSearchUrl(dataset, params = {}) {
+        const url = new URL('https://data.economie.gouv.fr/api/records/1.0/search/');
+        url.searchParams.set('dataset', dataset);
+
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') {
+                url.searchParams.set(key, value);
+            }
+        });
+
+        return url.toString();
+    }
+
+    function extractFacets(payload) {
+        if (payload?.facet_groups?.[0]?.facets) {
+            return payload.facet_groups[0].facets;
+        }
+
+        if (payload?.facets?.libelle_commune) {
+            return payload.facets.libelle_commune;
+        }
+
+        return [];
+    }
+
+    async function fetchCommuneSuggestions(searchTerm) {
+        for (const dataset of DATASET_CANDIDATES) {
+            const facetUrl = buildSearchUrl(dataset, {
+                rows: '0',
+                q: searchTerm,
+                facet: 'libelle_commune',
+                'facet.limit': '20',
+                'facet.sort': 'name'
+            });
+
+            const response = await fetch(facetUrl);
+            if (!response.ok) {
+                continue;
+            }
+
+            const data = await response.json();
+            const facets = extractFacets(data);
+
+            if (facets.length > 0) {
+                activeDataset = dataset;
+                return facets.map(item => item.name || item.value).filter(Boolean);
+            }
+        }
+
+        return [];
+    }
+
     // Événement sur le formulaire : au clic sur "Rechercher"
     document.getElementById('searchForm').addEventListener('submit', function(e){
         e.preventDefault();
         const searchTerm = document.getElementById('cityInput').value.trim();
         if (searchTerm === "") return;
 
-        // Appel à l'API pour récupérer les facettes (jusqu'à 20 communes)
-        const facetUrl = `https://data.economie.gouv.fr/api/records/1.0/search/?dataset=taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2023-2024-copie&rows=0&q=${encodeURIComponent(searchTerm)}&facet=libelle_commune&facet.limit=20&facet.sort=name`;
-        fetch(facetUrl)
-            .then(response => response.json())
-            .then(data => {
-                const facets = data.facet_groups && data.facet_groups[0] && data.facet_groups[0].facets;
-                if (facets && facets.length > 0) {
-                    displayCommuneSuggestions(facets.map(item => item.name));
+        fetchCommuneSuggestions(searchTerm)
+            .then(communes => {
+                if (communes.length > 0) {
+                    displayCommuneSuggestions(communes);
                 } else {
                     document.getElementById('suggestions').innerHTML = '<li>Aucune commune trouvée pour ce critère.</li>';
                 }
@@ -274,13 +329,22 @@
 
     // Fonction pour charger les détails de la commune sélectionnée
     function loadCommuneDetails(commune) {
+        if (!activeDataset) {
+            document.getElementById('results').innerHTML = '<p class="no-results">Impossible de déterminer la source des données.</p>';
+            return;
+        }
+
         const city = commune.toUpperCase();
         // Appel à l'API pour obtenir les enregistrements détaillés de la commune
-        const urlDetails = `https://data.economie.gouv.fr/api/records/1.0/search/?dataset=taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2023-2024-copie&rows=1000&q=${encodeURIComponent(city)}`;
+        const urlDetails = buildSearchUrl(activeDataset, {
+            rows: '1000',
+            q: commune,
+            'refine.libelle_commune': commune
+        });
         fetch(urlDetails)
             .then(response => response.json())
             .then(data => {
-                const records = data.records;
+                const records = data.records || [];
                 // Filtrer les enregistrements pour s'assurer que le nom de commune correspond exactement
                 dataRecords = records.filter(record => record.fields.libelle_commune && record.fields.libelle_commune.toUpperCase() === city);
                 if (dataRecords.length > 0) {
