@@ -183,11 +183,14 @@
     let sections = [];
     let parcelsBySection = {};
     let activeDataset = null;
+    const API_BASE_URL = 'https://www.data.economie.gouv.fr/api/records/1.0/search/';
 
+    // Le portail met à jour le contenu annuellement, mais l'identifiant peut rester historique.
+    // On conserve cet identifiant en premier pour éviter les erreurs CORS sur des IDs non valides.
     const DATASET_CANDIDATES = [
-        'taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2025-2026',
-        'taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2025-2026-copie',
-        'taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2023-2024-copie'
+        'taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2023-2024-copie',
+        'taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2024-2025',
+        'taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-applicables-2025-2026'
     ];
 
     // Variables pour les indices ICC
@@ -239,7 +242,7 @@
     });
 
     function buildSearchUrl(dataset, params = {}) {
-        const url = new URL('https://data.economie.gouv.fr/api/records/1.0/search/');
+        const url = new URL(API_BASE_URL);
         url.searchParams.set('dataset', dataset);
 
         Object.entries(params).forEach(([key, value]) => {
@@ -251,39 +254,50 @@
         return url.toString();
     }
 
-    function extractFacets(payload) {
-        if (payload?.facet_groups?.[0]?.facets) {
-            return payload.facet_groups[0].facets;
+    async function fetchCommuneSuggestions(searchTerm) {
+        const geoApiUrl = new URL('https://geo.api.gouv.fr/communes');
+        geoApiUrl.searchParams.set('nom', searchTerm);
+        geoApiUrl.searchParams.set('fields', 'nom');
+        geoApiUrl.searchParams.set('boost', 'population');
+        geoApiUrl.searchParams.set('limit', '20');
+
+        const response = await fetch(geoApiUrl.toString());
+        if (!response.ok) {
+            throw new Error('Échec de récupération des communes depuis geo.api.gouv.fr');
         }
 
-        if (payload?.facets?.libelle_commune) {
-            return payload.facets.libelle_commune;
-        }
-
-        return [];
+        const communes = await response.json();
+        return [...new Set((communes || []).map(item => item.nom).filter(Boolean))];
     }
 
-    async function fetchCommuneSuggestions(searchTerm) {
+    async function fetchCommuneRecords(commune) {
+        const cityUpper = commune.toUpperCase();
+
         for (const dataset of DATASET_CANDIDATES) {
-            const facetUrl = buildSearchUrl(dataset, {
-                rows: '0',
-                q: searchTerm,
-                facet: 'libelle_commune',
-                'facet.limit': '20',
-                'facet.sort': 'name'
-            });
+            try {
+                const detailsUrl = buildSearchUrl(dataset, {
+                    rows: '1000',
+                    q: commune,
+                    'refine.libelle_commune': commune
+                });
 
-            const response = await fetch(facetUrl);
-            if (!response.ok) {
-                continue;
-            }
+                const response = await fetch(detailsUrl);
+                if (!response.ok) {
+                    continue;
+                }
 
-            const data = await response.json();
-            const facets = extractFacets(data);
+                const data = await response.json();
+                const records = (data.records || []).filter(record =>
+                    record.fields.libelle_commune &&
+                    record.fields.libelle_commune.toUpperCase() === cityUpper
+                );
 
-            if (facets.length > 0) {
-                activeDataset = dataset;
-                return facets.map(item => item.name || item.value).filter(Boolean);
+                if (records.length > 0) {
+                    activeDataset = dataset;
+                    return records;
+                }
+            } catch (error) {
+                console.warn(`Dataset indisponible (${dataset}), tentative du suivant.`, error);
             }
         }
 
@@ -329,24 +343,9 @@
 
     // Fonction pour charger les détails de la commune sélectionnée
     function loadCommuneDetails(commune) {
-        if (!activeDataset) {
-            document.getElementById('results').innerHTML = '<p class="no-results">Impossible de déterminer la source des données.</p>';
-            return;
-        }
-
-        const city = commune.toUpperCase();
-        // Appel à l'API pour obtenir les enregistrements détaillés de la commune
-        const urlDetails = buildSearchUrl(activeDataset, {
-            rows: '1000',
-            q: commune,
-            'refine.libelle_commune': commune
-        });
-        fetch(urlDetails)
-            .then(response => response.json())
-            .then(data => {
-                const records = data.records || [];
-                // Filtrer les enregistrements pour s'assurer que le nom de commune correspond exactement
-                dataRecords = records.filter(record => record.fields.libelle_commune && record.fields.libelle_commune.toUpperCase() === city);
+        fetchCommuneRecords(commune)
+            .then(records => {
+                dataRecords = records;
                 if (dataRecords.length > 0) {
                     prepareData(dataRecords);
                     populateSectionDropdown();
