@@ -254,6 +254,20 @@
         return url.toString();
     }
 
+    function normalizeCommuneName(value) {
+        return (value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^A-Z0-9]/gi, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toUpperCase();
+    }
+
+    function getRecordFields(record) {
+        return record?.fields || record || {};
+    }
+
     async function fetchCommuneSuggestions(searchTerm) {
         const geoApiUrl = new URL('https://geo.api.gouv.fr/communes');
         geoApiUrl.searchParams.set('nom', searchTerm);
@@ -271,14 +285,13 @@
     }
 
     async function fetchCommuneRecords(commune) {
-        const cityUpper = commune.toUpperCase();
+        const normalizedInput = normalizeCommuneName(commune);
 
         for (const dataset of DATASET_CANDIDATES) {
             try {
                 const detailsUrl = buildSearchUrl(dataset, {
                     rows: '1000',
-                    q: commune,
-                    'refine.libelle_commune': commune
+                    q: commune
                 });
 
                 const response = await fetch(detailsUrl);
@@ -287,14 +300,29 @@
                 }
 
                 const data = await response.json();
-                const records = (data.records || []).filter(record =>
-                    record.fields.libelle_commune &&
-                    record.fields.libelle_commune.toUpperCase() === cityUpper
-                );
+                const records = data.records || data.results || [];
 
-                if (records.length > 0) {
+                // 1) Correspondance stricte (accents/ponctuation/casse ignorés)
+                let matchingRecords = records.filter(record => {
+                    const fields = getRecordFields(record);
+                    return normalizeCommuneName(fields.libelle_commune) === normalizedInput;
+                });
+
+                // 2) Fallback souple (arrondissements, suffixes, variantes)
+                if (matchingRecords.length === 0) {
+                    matchingRecords = records.filter(record => {
+                        const fields = getRecordFields(record);
+                        const normalizedRecordName = normalizeCommuneName(fields.libelle_commune);
+                        return normalizedRecordName.includes(normalizedInput) || normalizedInput.includes(normalizedRecordName);
+                    });
+                }
+
+                if (matchingRecords.length > 0) {
                     activeDataset = dataset;
-                    return records;
+                    return matchingRecords.map(record => ({
+                        ...record,
+                        fields: getRecordFields(record)
+                    }));
                 }
             } catch (error) {
                 console.warn(`Dataset indisponible (${dataset}), tentative du suivant.`, error);
