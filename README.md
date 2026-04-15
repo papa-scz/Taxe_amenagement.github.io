@@ -1,70 +1,28 @@
-# Recherche de Taxe d'Aménagement par Ville
+# Taxe d'aménagement par commune
 
-Une application web simple qui permet aux utilisateurs de saisir le nom d'une ville et d'afficher le taux de taxe d'aménagement ainsi que la date d'effet correspondante, en se basant sur les données de l'API du gouvernement français.
+Application web statique pour consulter les taux de taxe d'aménagement publiés par la DGFIP.
 
-## 📋 **Description**
+## Fonctionnement
 
-Ce projet fournit une interface utilisateur épurée pour rechercher des informations sur la taxe d'aménagement votée par les collectivités locales en France. En utilisant l'API ouverte de [data.economie.gouv.fr](https://data.economie.gouv.fr/), les utilisateurs peuvent obtenir rapidement le taux applicable et la date d'effet pour la ville de leur choix.
+- Recherche d'une commune via `geo.api.gouv.fr`, avec sélection par code INSEE pour éviter les homonymes.
+- Lecture du dataset DGFIP `delta_deliberation_tam_17_01_23`, publié sur `data.economie.gouv.fr`.
+- Fallback sur le miroir fédéré `data.opendatasoft.com` lorsque le portail du ministère refuse ou bloque l'appel direct.
+- Affichage séparé des parts communale, départementale et régionale lorsqu'elles existent.
+- Recherche cadastrale optionnelle par préfixe, section et parcelle, sans charger toutes les lignes d'une commune.
 
-## 🚀 **Fonctionnalités**
+## Utilisation locale
 
-- **Recherche par ville** : Saisissez le nom d'une ville pour obtenir les informations pertinentes.
-- **Affichage des résultats** : Les taux et dates d'effet sont affichés de manière claire et lisible.
-- **Interface intuitive** : Design épuré et convivial pour une utilisation facile.
+Ouvrez simplement `index.html` dans un navigateur moderne.
 
-## 🛠️ **Installation**
+L'application n'a pas besoin de build ni de dépendances. Les données sont chargées directement depuis les API publiques.
 
-Aucune installation n'est requise si vous accédez au site hébergé via GitHub Pages. Si vous souhaitez exécuter le projet localement :
+## Sources
 
-1. **Clonez le dépôt** :
+- Dataset fiscal DGFIP: <https://data.economie.gouv.fr/explore/dataset/delta_deliberation_tam_17_01_23/>
+- Fiche data.gouv.fr: <https://www.data.gouv.fr/datasets/taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-a-partir-de-2022>
+- API communes: <https://geo.api.gouv.fr/decoupage-administratif/communes>
+- Valeurs forfaitaires 2026: <https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006069577/LEGISCTA000045912516/2026-01-01>
 
-   ```bash
-   git clone https://github.com/votre_nom_utilisateur/votre_depot.git
-   ```
+## Limites
 
-2. **Accédez au répertoire du projet** :
-
-   ```bash
-   cd votre_depot
-   ```
-
-3. **Ouvrez le fichier `index.html`** dans votre navigateur web préféré.
-
-## 🌐 **Déploiement sur GitHub Pages**
-
-Pour déployer le site sur GitHub Pages :
-
-1. Assurez-vous que le fichier `index.html` se trouve à la racine de votre dépôt.
-2. Allez dans les **paramètres** de votre dépôt sur GitHub.
-3. Cliquez sur **Pages** dans le menu latéral.
-4. Sous **Source**, sélectionnez la branche `main` (ou `master`) et le répertoire racine (`/`).
-5. Enregistrez les modifications. Votre site sera accessible à l'adresse :
-
-   ```
-   https://votre_nom_utilisateur.github.io/votre_depot/
-   ```
-
-## 📚 **Utilisation**
-
-1. **Accédez au site web** via l'URL fournie ou en ouvrant `index.html` localement.
-2. **Saisissez le nom d'une ville** dans le champ de recherche.
-3. **Cliquez sur "Rechercher"** pour afficher les résultats.
-4. Les **taux** et **dates d'effet** associés à la ville s'afficheront en dessous.
-
-## ⚠️ **Remarques**
-
-- **Limitations de l'API** : L'API utilisée dépend de la disponibilité et des données fournies par [data.economie.gouv.fr](https://data.economie.gouv.fr/).
-
-## 📄 **Licence**
-
-Ce projet est sous licence [MIT](LICENSE).
-
-## 🤝 **Contribuer**
-
-Les contributions sont les bienvenues ! Si vous souhaitez améliorer ce projet, veuillez suivre ces étapes :
-
-1. **Fork** le projet.
-2. Créez une **branche** pour votre fonctionnalité (`git checkout -b feature/AmazingFeature`).
-3. **Commitez** vos modifications (`git commit -m 'Add some AmazingFeature'`).
-4. **Pushez** vers la branche (`git push origin feature/AmazingFeature`).
-5. Ouvrez une **Pull Request**.
+Les taux affichés sont ceux des délibérations disponibles dans les données ouvertes. Une référence cadastrale mal saisie peut faire retomber l'affichage sur le taux général de la commune.
