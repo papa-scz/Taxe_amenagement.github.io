@@ -9,6 +9,8 @@ Application web statique pour consulter les taux de taxe d'aménagement publiés
 - Fallback sur le miroir fédéré `data.opendatasoft.com` lorsque le portail du ministère refuse ou bloque l'appel direct.
 - Affichage séparé des parts communale, départementale et régionale lorsqu'elles existent.
 - Recherche cadastrale optionnelle par préfixe, section et parcelle, sans charger toutes les lignes d'une commune.
+- Calcul dynamique de la valeur forfaitaire au m² depuis l'ICC Insee connu au 1er janvier de l'année.
+- Calculette ICC indicative pour projeter une valeur forfaitaire hypothétique à une date future.
 
 ## Utilisation locale
 
@@ -21,8 +23,11 @@ L'application n'a pas besoin de build ni de dépendances. Les données sont char
 - Dataset fiscal DGFIP: <https://data.economie.gouv.fr/explore/dataset/delta_deliberation_tam_17_01_23/>
 - Fiche data.gouv.fr: <https://www.data.gouv.fr/datasets/taxe-damenagement-elements-de-taxation-votes-par-les-collectivites-a-partir-de-2022>
 - API communes: <https://geo.api.gouv.fr/decoupage-administratif/communes>
-- Valeurs forfaitaires 2026: <https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006069577/LEGISCTA000045912516/2026-01-01>
+- ICC Insee: <https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/000008630>
+- Règle d'actualisation: <https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006069577/LEGISCTA000045912516/2026-01-01>
 
 ## Limites
 
 Les taux affichés sont ceux des délibérations disponibles dans les données ouvertes. Une référence cadastrale mal saisie peut faire retomber l'affichage sur le taux général de la commune.
+
+La calculette ICC est une projection non réglementaire. Elle applique un plancher sur la valeur 2025 et une hypothèse d'inflation annuelle minimale par défaut de 1,25%.

@@ -105,7 +105,8 @@
             font-weight: 700;
         }
 
-        input {
+        input,
+        select {
             width: 100%;
             min-height: 48px;
             padding: 11px 12px;
@@ -116,7 +117,8 @@
             font: inherit;
         }
 
-        input:focus {
+        input:focus,
+        select:focus {
             outline: 3px solid var(--accent-soft);
             border-color: var(--accent);
         }
@@ -302,6 +304,81 @@
             line-height: 1;
         }
 
+        .calculator-shell {
+            display: grid;
+            gap: 14px;
+            padding: 22px 0;
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .calculator-toggle-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: end;
+        }
+
+        .calculator-panel {
+            display: grid;
+            gap: 14px;
+            padding: 18px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: var(--paper);
+        }
+
+        .calculator-panel[hidden],
+        .calculator-output[hidden] {
+            display: none;
+        }
+
+        .calculator-form {
+            display: grid;
+            grid-template-columns: minmax(120px, 0.7fr) minmax(130px, 0.8fr) minmax(130px, 0.8fr) minmax(150px, 1fr) auto;
+            gap: 12px;
+            align-items: end;
+        }
+
+        .calculator-output {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .output-item {
+            min-height: 86px;
+            padding: 12px;
+            border: 1px solid #e8eeeb;
+            border-radius: 8px;
+            background: #fbfcfb;
+        }
+
+        .output-item span {
+            display: block;
+            color: var(--muted);
+            font-size: 0.82rem;
+            font-weight: 800;
+        }
+
+        .output-item strong {
+            display: block;
+            margin-top: 6px;
+            overflow-wrap: anywhere;
+        }
+
+        .calculator-note {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.55;
+        }
+
+        .calculator-note.warning {
+            color: var(--warn);
+            font-weight: 700;
+        }
+
         .results {
             display: grid;
             gap: 12px;
@@ -410,6 +487,8 @@
 
             .search-form,
             .reference-form,
+            .calculator-form,
+            .calculator-output,
             .summary,
             .record-grid,
             .detail-list {
@@ -417,6 +496,7 @@
             }
 
             .reference-form button,
+            .calculator-form button,
             .search-form button {
                 width: 100%;
             }
@@ -504,7 +584,7 @@
                 <strong id="localRate">--</strong>
             </div>
             <div class="metric">
-                <span>Valeur m² 2026</span>
+                <span id="surfaceValueLabel">Valeur m²</span>
                 <strong id="surfaceValue">--</strong>
             </div>
             <div class="metric">
@@ -513,11 +593,64 @@
             </div>
         </section>
 
+        <section class="calculator-shell" aria-labelledby="calculatorTitle">
+            <div class="calculator-toggle-row">
+                <div>
+                    <h2 id="calculatorTitle">Calculette ICC</h2>
+                    <p class="meta-line">Projetez une valeur forfaitaire future à partir de la valeur 2025 et du dernier ICC connu.</p>
+                </div>
+                <button type="button" class="button-secondary" id="toggleCalculator" aria-controls="calculatorPanel" aria-expanded="false">Ouvrir la calculette</button>
+            </div>
+            <div class="calculator-panel" id="calculatorPanel" hidden>
+                <form class="calculator-form" id="projectionForm">
+                    <div class="field">
+                        <label for="projectionTerritory">Base</label>
+                        <select id="projectionTerritory">
+                            <option value="standard">Hors Île-de-France</option>
+                            <option value="ileDeFrance">Île-de-France</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="projectionBaseValue">Valeur 2025</label>
+                        <input type="number" id="projectionBaseValue" min="1" step="1" value="930">
+                    </div>
+                    <div class="field">
+                        <label for="projectionMinInflation">Inflation annuelle minimum</label>
+                        <input type="number" id="projectionMinInflation" min="0" step="0.05" value="1.25">
+                    </div>
+                    <div class="field">
+                        <label for="projectionDate">Date souhaitée</label>
+                        <input type="date" id="projectionDate" required>
+                    </div>
+                    <button type="submit">Calculer</button>
+                </form>
+                <div class="calculator-output" id="calculatorOutput" hidden>
+                    <div class="output-item">
+                        <span>Dernier ICC connu</span>
+                        <strong id="latestIccOutput">--</strong>
+                    </div>
+                    <div class="output-item">
+                        <span>Valeur actualisée ICC</span>
+                        <strong id="latestValueOutput">--</strong>
+                    </div>
+                    <div class="output-item">
+                        <span>Projection</span>
+                        <strong id="projectedValueOutput">--</strong>
+                    </div>
+                    <div class="output-item">
+                        <span>Rythme appliqué</span>
+                        <strong id="projectionRateOutput">--</strong>
+                    </div>
+                </div>
+                <p class="calculator-note" id="calculatorStatus">Chargement de l'ICC Insee...</p>
+            </div>
+        </section>
+
         <section class="results" id="results" aria-label="Résultats"></section>
     </main>
 
     <footer class="page-footer">
-        <p>Données fiscales: dataset DGFIP <a href="https://data.economie.gouv.fr/explore/dataset/delta_deliberation_tam_17_01_23/" target="_blank" rel="noopener">delta_deliberation_tam_17_01_23</a>. Communes: <a href="https://geo.api.gouv.fr/decoupage-administratif/communes" target="_blank" rel="noopener">geo.api.gouv.fr</a>. Valeurs forfaitaires 2026: <a href="https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006069577/LEGISCTA000045912516/2026-01-01" target="_blank" rel="noopener">Code général des impôts, articles 1635 quater H à K</a>.</p>
+        <p>Données fiscales: dataset DGFIP <a href="https://data.economie.gouv.fr/explore/dataset/delta_deliberation_tam_17_01_23/" target="_blank" rel="noopener">delta_deliberation_tam_17_01_23</a>. Communes: <a href="https://geo.api.gouv.fr/decoupage-administratif/communes" target="_blank" rel="noopener">geo.api.gouv.fr</a>. Valeurs forfaitaires: <a href="https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/000008630" target="_blank" rel="noopener">ICC Insee</a> et <a href="https://www.legifrance.gouv.fr/codes/section_lc/LEGITEXT000006069577/LEGISCTA000045912516/2026-01-01" target="_blank" rel="noopener">Code général des impôts, articles 1635 quater H à K</a>.</p>
     </footer>
 
     <script>
@@ -534,11 +667,27 @@
         }
     ];
     const GEO_API_URL = 'https://geo.api.gouv.fr/communes';
+    const ICC_SERIES_URL = 'https://api.insee.fr/series/BDM/V1/data/SERIES_BDM/000008630?lastNObservations=80';
     const ILE_DE_FRANCE_DEPARTMENTS = new Set(['75', '77', '78', '91', '92', '93', '94', '95']);
-    const SURFACE_VALUES_2026 = {
+    const TAX_VALUE_BASE_YEAR = 2025;
+    const TAX_VALUE_BASE_EFFECTIVE_DATE = '2025-01-01';
+    const DEFAULT_MIN_ANNUAL_INFLATION_RATE = 0.0125;
+    const TAX_VALUE_BASE_VALUES = {
         standard: 930,
         ileDeFrance: 1054
     };
+    const FALLBACK_ICC_OBSERVATIONS = [
+        { period: '2025-Q4', value: 2058, publicationDate: '2026-03-26' },
+        { period: '2025-Q3', value: 2056, publicationDate: '2025-12-17' },
+        { period: '2025-Q2', value: 2086, publicationDate: '2025-09-24' },
+        { period: '2025-Q1', value: 2146, publicationDate: '2025-07-02' },
+        { period: '2024-Q4', value: 2108, publicationDate: '2025-03-26' },
+        { period: '2024-Q3', value: 2143, publicationDate: '2024-12-18' },
+        { period: '2024-Q2', value: 2205, publicationDate: '2024-09-25' },
+        { period: '2024-Q1', value: 2227, publicationDate: '2024-06-29' },
+        { period: '2023-Q4', value: 2162, publicationDate: '2024-04-04' },
+        { period: '2023-Q3', value: 2106, publicationDate: '2023-12-22' }
+    ];
     const SELECTED_FIELDS = [
         'siren',
         'nic',
@@ -571,7 +720,9 @@
         selectedCommune: null,
         preferredEndpointIndex: 0,
         activeSource: '',
-        sectorizedCount: 0
+        sectorizedCount: 0,
+        iccObservations: FALLBACK_ICC_OBSERVATIONS,
+        iccSource: 'fallback'
     };
 
     const elements = {
@@ -594,13 +745,33 @@
         summary: document.getElementById('summary'),
         totalRate: document.getElementById('totalRate'),
         localRate: document.getElementById('localRate'),
+        surfaceValueLabel: document.getElementById('surfaceValueLabel'),
         surfaceValue: document.getElementById('surfaceValue'),
         sectorCount: document.getElementById('sectorCount'),
+        toggleCalculator: document.getElementById('toggleCalculator'),
+        calculatorPanel: document.getElementById('calculatorPanel'),
+        projectionForm: document.getElementById('projectionForm'),
+        projectionTerritory: document.getElementById('projectionTerritory'),
+        projectionBaseValue: document.getElementById('projectionBaseValue'),
+        projectionMinInflation: document.getElementById('projectionMinInflation'),
+        projectionDate: document.getElementById('projectionDate'),
+        calculatorOutput: document.getElementById('calculatorOutput'),
+        latestIccOutput: document.getElementById('latestIccOutput'),
+        latestValueOutput: document.getElementById('latestValueOutput'),
+        projectedValueOutput: document.getElementById('projectedValueOutput'),
+        projectionRateOutput: document.getElementById('projectionRateOutput'),
+        calculatorStatus: document.getElementById('calculatorStatus'),
         results: document.getElementById('results')
     };
 
     elements.searchForm.addEventListener('submit', handleCommuneSearch);
     elements.referenceForm.addEventListener('submit', handleReferenceSearch);
+    elements.toggleCalculator.addEventListener('click', toggleCalculator);
+    elements.projectionForm.addEventListener('submit', handleProjectionSubmit);
+    elements.projectionTerritory.addEventListener('change', () => {
+        elements.projectionBaseValue.value = TAX_VALUE_BASE_VALUES[elements.projectionTerritory.value];
+        renderProjection();
+    });
     elements.resetReference.addEventListener('click', () => {
         elements.prefixInput.value = '';
         elements.sectionInput.value = '';
@@ -609,6 +780,77 @@
             loadCommuneOverview(state.selectedCommune);
         }
     });
+
+    initializeIccData();
+
+    async function initializeIccData() {
+        setProjectionDefaults();
+        updateCalculatorStatus('Chargement de l’ICC Insee...', 'info');
+
+        try {
+            const observations = await fetchIccObservations();
+            if (observations.length > 0) {
+                state.iccObservations = observations;
+                state.iccSource = 'insee';
+            }
+        } catch (error) {
+            console.warn('ICC Insee indisponible, utilisation des valeurs de secours.', error);
+            state.iccObservations = FALLBACK_ICC_OBSERVATIONS;
+            state.iccSource = 'fallback';
+        }
+
+        updateCalculatorStatus(getIccSourceMessage(), state.iccSource === 'insee' ? 'info' : 'warning');
+        renderProjection();
+        updateDisplayedSurfaceValue();
+    }
+
+    function setProjectionDefaults() {
+        if (!elements.projectionDate.value) {
+            elements.projectionDate.value = formatDateInput(getDefaultProjectionDate());
+            elements.projectionDate.min = formatDateInput(new Date());
+        }
+
+        elements.projectionBaseValue.value = TAX_VALUE_BASE_VALUES[elements.projectionTerritory.value];
+        elements.projectionMinInflation.value = (DEFAULT_MIN_ANNUAL_INFLATION_RATE * 100).toFixed(2);
+    }
+
+    async function fetchIccObservations() {
+        const response = await fetch(ICC_SERIES_URL, { headers: { Accept: 'application/xml' } });
+        if (!response.ok) {
+            throw new Error(`api.insee.fr ${response.status}`);
+        }
+
+        const xml = await response.text();
+        const xmlDoc = new DOMParser().parseFromString(xml, 'application/xml');
+        const observations = [...xmlDoc.getElementsByTagName('Obs')].map(obs => ({
+            period: obs.getAttribute('TIME_PERIOD'),
+            value: Number(obs.getAttribute('OBS_VALUE')),
+            publicationDate: obs.getAttribute('DATE_JO')
+        }));
+
+        return normalizeIccObservations(observations);
+    }
+
+    function normalizeIccObservations(observations) {
+        return observations
+            .filter(obs => obs.period && Number.isFinite(obs.value) && parseDate(obs.publicationDate))
+            .sort((a, b) => compareDates(b.publicationDate, a.publicationDate));
+    }
+
+    function toggleCalculator() {
+        const shouldOpen = elements.calculatorPanel.hidden;
+        elements.calculatorPanel.hidden = !shouldOpen;
+        elements.toggleCalculator.setAttribute('aria-expanded', String(shouldOpen));
+        elements.toggleCalculator.textContent = shouldOpen ? 'Fermer la calculette' : 'Ouvrir la calculette';
+        if (shouldOpen) {
+            renderProjection();
+        }
+    }
+
+    function handleProjectionSubmit(event) {
+        event.preventDefault();
+        renderProjection();
+    }
 
     async function handleCommuneSearch(event) {
         event.preventDefault();
@@ -965,6 +1207,109 @@
         return order.indexOf(normalizeText(a.zone_application)) - order.indexOf(normalizeText(b.zone_application));
     }
 
+    function getSurfaceValueForCommune(commune) {
+        const territory = ILE_DE_FRANCE_DEPARTMENTS.has(commune.codeDepartement) ? 'ileDeFrance' : 'standard';
+        return calculateOfficialSurfaceValue(new Date().getFullYear(), TAX_VALUE_BASE_VALUES[territory]);
+    }
+
+    function updateDisplayedSurfaceValue() {
+        if (!state.selectedCommune || elements.summary.hidden) return;
+        const surfaceValue = getSurfaceValueForCommune(state.selectedCommune);
+        elements.surfaceValueLabel.textContent = `Valeur m² ${surfaceValue.year}`;
+        elements.surfaceValue.textContent = formatCurrency(surfaceValue.value);
+    }
+
+    function calculateOfficialSurfaceValue(year, baseValue) {
+        const baseObservation = getIccKnownAtJanFirst(TAX_VALUE_BASE_YEAR);
+        const targetObservation = getIccKnownAtJanFirst(year);
+
+        if (!baseObservation || !targetObservation) {
+            return {
+                year,
+                value: Math.floor(baseValue),
+                baseObservation: null,
+                targetObservation: null
+            };
+        }
+
+        return {
+            year,
+            value: Math.floor(baseValue * (targetObservation.value / baseObservation.value)),
+            baseObservation,
+            targetObservation
+        };
+    }
+
+    function getIccKnownAtJanFirst(year) {
+        const cutoff = new Date(`${year}-01-01T23:59:59`);
+        return state.iccObservations
+            .filter(obs => parseDate(obs.publicationDate) <= cutoff)
+            .sort((a, b) => compareDates(b.publicationDate, a.publicationDate))[0] || null;
+    }
+
+    function getLatestPublishedIccObservation() {
+        const today = new Date();
+        return state.iccObservations
+            .filter(obs => parseDate(obs.publicationDate) <= today)
+            .sort((a, b) => compareDates(b.publicationDate, a.publicationDate))[0] || null;
+    }
+
+    function renderProjection() {
+        const baseValue = Number(elements.projectionBaseValue.value);
+        const targetDate = parseDate(elements.projectionDate.value);
+        const minAnnualRate = Math.max(0, Number(elements.projectionMinInflation.value) / 100);
+        const baseObservation = getIccKnownAtJanFirst(TAX_VALUE_BASE_YEAR);
+        const latestObservation = getLatestPublishedIccObservation();
+
+        if (!Number.isFinite(baseValue) || baseValue <= 0 || !targetDate || !baseObservation || !latestObservation) {
+            elements.calculatorOutput.hidden = true;
+            updateCalculatorStatus('Impossible de calculer la projection avec les valeurs saisies.', 'warning');
+            return;
+        }
+
+        const latestPublicationDate = parseDate(latestObservation.publicationDate);
+        const baseDate = parseDate(TAX_VALUE_BASE_EFFECTIVE_DATE);
+        const monthsSinceBase = Math.max(1, monthsBetween(baseDate, latestPublicationDate));
+        const monthsToTarget = Math.max(0, monthsBetween(latestPublicationDate, targetDate));
+        const latestActualizedRaw = baseValue * (latestObservation.value / baseObservation.value);
+        const latestActualizedValue = Math.floor(latestActualizedRaw);
+        const observedMonthlyRate = Math.pow(latestActualizedRaw / baseValue, 1 / monthsSinceBase) - 1;
+        const minMonthlyRate = Math.pow(1 + minAnnualRate, 1 / 12) - 1;
+        const appliedMonthlyRate = Math.max(observedMonthlyRate, minMonthlyRate);
+        const projectionStartValue = Math.max(baseValue, latestActualizedRaw);
+        const projectedRaw = projectionStartValue * Math.pow(1 + appliedMonthlyRate, monthsToTarget);
+        const projectedValue = Math.max(Math.floor(baseValue), Math.floor(projectedRaw));
+        const appliedAnnualRate = Math.pow(1 + appliedMonthlyRate, 12) - 1;
+
+        elements.latestIccOutput.textContent = `${latestObservation.period} · ${formatInteger(latestObservation.value)} · publié le ${formatDate(latestObservation.publicationDate)}`;
+        elements.latestValueOutput.textContent = `${formatCurrency(latestActualizedValue)} avant plancher`;
+        elements.projectedValueOutput.textContent = `${formatCurrency(projectedValue)} au ${formatDate(elements.projectionDate.value)}`;
+        elements.projectionRateOutput.textContent = `${formatPercent(appliedAnnualRate * 100)} par an`;
+        elements.calculatorOutput.hidden = false;
+
+        const floorApplied = latestActualizedRaw < baseValue || projectedRaw < baseValue;
+        const sourceMessage = getIccSourceMessage();
+        const floorMessage = floorApplied
+            ? ' Plancher appliqué: la projection ne descend pas sous la valeur 2025.'
+            : '';
+        updateCalculatorStatus(`${sourceMessage} Projection indicative, non réglementaire.${floorMessage}`, state.iccSource === 'insee' ? 'info' : 'warning');
+    }
+
+    function getIccSourceMessage() {
+        const source = state.iccSource === 'insee' ? 'ICC chargé depuis l’Insee.' : 'ICC de secours utilisé.';
+        const official2026 = calculateOfficialSurfaceValue(2026, TAX_VALUE_BASE_VALUES.standard);
+        if (!official2026.targetObservation || !official2026.baseObservation) {
+            return source;
+        }
+
+        return `${source} Valeur 2026 hors Île-de-France: ${formatCurrency(official2026.value)} (${official2026.targetObservation.period}, publié le ${formatDate(official2026.targetObservation.publicationDate)}).`;
+    }
+
+    function updateCalculatorStatus(message, type = 'info') {
+        elements.calculatorStatus.textContent = message;
+        elements.calculatorStatus.className = `calculator-note ${type === 'warning' ? 'warning' : ''}`;
+    }
+
     function renderTaxResults(records, context) {
         const { commune, reference, hasReference } = context;
         elements.results.innerHTML = '';
@@ -978,13 +1323,12 @@
         const localRecord = records.find(record => normalizeText(record.zone_application) === 'COMMUNALE');
         const isSpecificMatch = hasReference && localRecord && isSpecificRecord(localRecord, reference);
         const totalRate = records.reduce((sum, record) => sum + (Number(record.taux) || 0), 0);
-        const surfaceValue = ILE_DE_FRANCE_DEPARTMENTS.has(commune.codeDepartement)
-            ? SURFACE_VALUES_2026.ileDeFrance
-            : SURFACE_VALUES_2026.standard;
+        const surfaceValue = getSurfaceValueForCommune(commune);
 
         elements.totalRate.textContent = formatPercent(totalRate);
         elements.localRate.textContent = localRecord ? formatPercent(localRecord.taux) : '--';
-        elements.surfaceValue.textContent = formatCurrency(surfaceValue);
+        elements.surfaceValueLabel.textContent = `Valeur m² ${surfaceValue.year}`;
+        elements.surfaceValue.textContent = formatCurrency(surfaceValue.value);
         elements.sectorCount.textContent = formatInteger(state.sectorizedCount);
         elements.summary.hidden = false;
 
@@ -1141,6 +1485,24 @@
         const dateA = parseDate(a);
         const dateB = parseDate(b);
         return (dateA ? dateA.getTime() : 0) - (dateB ? dateB.getTime() : 0);
+    }
+
+    function monthsBetween(startDate, endDate) {
+        if (!startDate || !endDate) return 0;
+        const millisecondsPerAverageMonth = 1000 * 60 * 60 * 24 * 30.4375;
+        return (endDate.getTime() - startDate.getTime()) / millisecondsPerAverageMonth;
+    }
+
+    function getDefaultProjectionDate() {
+        const nextYear = new Date().getFullYear() + 1;
+        return new Date(`${nextYear}-01-01T00:00:00`);
+    }
+
+    function formatDateInput(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
     }
 
     function normalizeText(value) {
